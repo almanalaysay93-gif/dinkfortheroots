@@ -5,8 +5,6 @@ export const CATEGORIES = [
   { key: "novice-mens", label: "Novice Men's Doubles" },
   { key: "novice-womens", label: "Novice Women's Doubles" },
   { key: "novice-mixed", label: "Novice Mixed Doubles" },
-  { key: "rookie-mens", label: "Rookie Men's Doubles" },
-  { key: "rookie-womens", label: "Rookie Women's Doubles" },
   { key: "rookie-mixed", label: "Rookie Mixed Doubles" },
 ];
 export const CAP = 40;
@@ -19,7 +17,7 @@ export const isPastCutoff = () => Date.now() > CUTOFF_MS;
 const DEMO_KEY = "dfr-demo-registrations";
 const DEMO_BASE = {
   "novice-mens": 18, "novice-womens": 10, "novice-mixed": 22,
-  "rookie-mens": 14, "rookie-womens": 9, "rookie-mixed": 16,
+  "rookie-mixed": 16,
 };
 
 function readDemo() {

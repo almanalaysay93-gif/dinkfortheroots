@@ -19,8 +19,6 @@ Registration closes on November 20, 2026, at 11:59 PM (Asia/Manila). After the c
 - Novice Men's Doubles: 20 pairs
 - Novice Women's Doubles: 20 pairs
 - Novice Mixed Doubles: 20 pairs
-- Rookie Men's Doubles: 20 pairs
-- Rookie Women's Doubles: 20 pairs
 - Rookie Mixed Doubles: 20 pairs
 
 Slots count players. Each category has 40 player slots.
@@ -39,7 +37,7 @@ Every player gets:
 
 ## Prizes
 
-Each of the 6 categories awards the same prizes:
+Each of the 4 categories awards the same prizes:
 
 - Champion: ₱5,000
 - Silver: ₱3,000
