@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://almanalaysay93-gif.github.io/dinkfortheroots/sitemap.xml
+Sitemap: https://dinkfortheroots.redirectme.net/sitemap.xml

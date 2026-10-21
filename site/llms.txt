@@ -48,5 +48,5 @@ Each Novice category and the Rookie category award the same prizes:
 
 ## Links
 
-- [Dink for the Roots](https://almanalaysay93-gif.github.io/dinkfortheroots/): Event details, categories, prizes, and partners.
-- [Register a player](https://almanalaysay93-gif.github.io/dinkfortheroots/#register): Registration form for one player.
+- [Dink for the Roots](https://dinkfortheroots.redirectme.net/): Event details, categories, prizes, and partners.
+- [Register a player](https://dinkfortheroots.redirectme.net/#register): Registration form for one player.
