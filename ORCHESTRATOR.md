@@ -53,7 +53,7 @@ Davao del Sur LGUs (exact strings): `Digos City, Bansalan, Hagonoy, Kiblawan, Ma
 
 - `title.png|webp` (1235x543, transparent sticker title), `logo-make-them-visible.png|webp` (215x215 round), `logo-circle-of-care.png|webp` (362x145 card).
 - `bg-court-1600.webp|jpg`, `bg-court-900.webp|jpg`: portrait court photo (aspect 1122:1402), baked title removed. Original title sat top-left at x 5%-55%, y 10%-28%. Players stand bottom-right.
-- `size-chart.jpg` (shirt measuring guide), `poster.jpg` (event poster, emailed to players), `payment-qr.png` slot: the user adds the real QR later. Until then the page shows a placeholder.
+- `size-chart.jpg` (shirt measuring guide), `payment-qr.png` slot: the user adds the real QR later. Until then the page shows a placeholder.
 
 ## API contract (Apps Script web app)
 
@@ -68,7 +68,7 @@ GET `ENDPOINT?action=slots` also works and returns the same as POST `slots`.
    - Duplicate rule: same email in same category → `{ ok:true, duplicate:true, ref:<existing> }`.
    - Full category → `{ ok:false, error:"FULL" }`. Uses `LockService` around count + append.
    - Saves receipt to Drive folder `Dink for the Roots Receipts` as `<ref>-<fileName>`, appends row, status `Pending check`.
-   - Sends player thank-you email (HTML + plain text) with `poster.jpg` attached (fetched with `UrlFetchApp` from `POSTER_URL` script property). Sends organizer alert to the union of the two default organizer emails and any comma-separated addresses in script property `ORGANIZER_EMAIL`.
+   - Sends player thank-you email (HTML + plain text). No poster since 2026-10-21 (user request): `POSTER_URL` is empty, so nothing is attached. Sends organizer alert to the union of the two default organizer emails and any comma-separated addresses in script property `ORGANIZER_EMAIL`.
    - After the append (inside the lock) rebuilds the 6 category tabs. A tab rebuild failure is logged and does not fail the registration.
    - Returns `{ ok:true, ref:"DFR-XXXXXX" }`.
 3. `{ action:"pending", key }` (admin) → `{ ok:true, items:[{ ref, row, fullName, email, category, paymentRef, submittedAt, fileName, mimeType, base64 }] }` for rows with status `Pending check`, max 10 per call.

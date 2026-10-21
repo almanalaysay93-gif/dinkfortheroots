@@ -291,7 +291,7 @@ async function send(form, payload) {
       showStatus("warn", `<h3>You are already registered</h3><p>This email already has an entry in this category.</p><p>Your reference: <span class="ref">${esc(res.ref)}</span></p>`);
     } else if (res && res.ok) {
       const name = esc(payload.player.fullName.split(" ")[0]);
-      showStatus("ok", `<h3>Registration received, ${name}</h3><p>Your reference: <span class="ref">${esc(res.ref)}</span></p><p>Your valid ID was received.</p><p>A confirmation email with the event poster is on its way to ${esc(payload.player.email)}. The organizers will check your receipt and email you if anything is missing.</p><p>Ask your partner to fill their own form.</p>`);
+      showStatus("ok", `<h3>Registration received, ${name}</h3><p>Your reference: <span class="ref">${esc(res.ref)}</span></p><p>Your valid ID was received.</p><p>A confirmation email is on its way to ${esc(payload.player.email)}. The organizers will check your receipt and email you if anything is missing.</p><p>Ask your partner to fill their own form.</p>`);
       form.reset();
       for (const key of UPLOAD_KEYS) setUpload(key, null);
       $("#sizeGuide").hidden = true;
