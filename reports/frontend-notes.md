@@ -71,3 +71,53 @@ Checks ran in Chrome through the chrome-devtools MCP against `python -m http.ser
 - O2: On short phones (320 x 700) the date and venue chips cover part of the player's face. The title and chips take most of the hero height there.
 - O3: The consent checkbox is 24 px. Its label is part of the tap target.
 - O4: The local server on port 8137 was left running in the background.
+
+## v2 (2026-10-21)
+
+### Changes
+
+1. V1: Falling pickleballs.
+   The new file `site/js/ballfall.js` draws lime perforated balls on one sticky 2D canvas.
+   The canvas sits in a new wrapper `#ballZone` around `#event` and `#categories`.
+   Ball sprites are drawn in code once, at three depth levels (blur, size, opacity).
+   Ball position and spin are a pure function of the scroll offset, so a scroll up plays the fall in reverse.
+   The draw runs in one `requestAnimationFrame` per scroll event, only while the zone is on screen.
+   Balls stay right of the measured text edge (eyebrow, heading, lede) and in the left gutter.
+   On phones, five small balls sit half off the right edge at 16% to 22% opacity.
+   Reduced motion shows four still balls (two on phones) and no scroll motion.
+   The category cards now have an opaque base, so a ball never shows through card text.
+2. V2: Court photo behind the registration section.
+   `#register` has a `.court-bg` layer with a sticky viewport-height frame, so the court stays behind the form while the form scrolls.
+   The frame uses `<picture>` with WEBP and JPG at 960w and 1920w, `sizes="max(100vw, 178vh)"`.
+   JavaScript sets the image sources only when the section is within 900 px of the viewport, so the photo never competes with the hero LCP.
+   A dark scrim (80% to 86% at the top) and a top and bottom mask keep the heading readable.
+   The image drifts by up to 5% of the viewport height with scroll. Reduced motion has no drift.
+   `.section--register` now uses `overflow: clip` (with `hidden` as a fallback), because `hidden` stops `position: sticky`.
+3. V3: Google Maps links.
+   The hero venue chip and the facts venue are links to the Google Maps search URL, with `target="_blank"`, `rel="noopener"`, and the name "Pickle Park, Roxas Extension, Digos City (opens Google Maps)".
+   The chip shows an underline and an external icon. The facts link shows an underline and "Open in Maps".
+   Both links are at least 44 px high and have hover and focus styles.
+
+### Verified, with evidence
+
+Checks ran in Chrome through the chrome-devtools MCP against `python -m http.server 8138` in `site/`.
+The form was not submitted, because the live endpoint is set.
+
+1. Scroll reversal at 1440 x 900: a canvas pixel hash at offset 300 px, then 700 px, then 300 px again gave the same hash at 300 px and a different hash at 700 px.
+2. No ball under loose text: a sweep of the zone in 50 px steps found 0 canvas pixels inside 266 text line boxes at 1440 x 900, and 0 at 390 x 844.
+3. No horizontal overflow at 1440 x 900 and 390 x 844.
+4. The court image did not load at the top of the page. It loaded (1920 WEBP) when the form came near. LCP stayed on the hero title.
+5. Contrast over the court photo at 1440 x 900, from the 99th percentile background pixel next to the text: lede 8.2:1, heading 11.8:1, eyebrow 8.7:1.
+6. Both map links have the right `href`, `target`, `rel`, and accessible name. Heights: chip 44 px, facts link 74 px.
+7. Reduced motion: the ball layer shows still balls, the court image has no transform.
+8. Console: no errors. The only warning was the `getImageData` readback from the test script.
+
+Screenshots: `screens/v2-desktop-balls-a.png`, `screens/v2-desktop-balls-b.png`, `screens/v2-desktop-register-court.png`, `screens/v2-desktop-reduced-motion.png`, `screens/v2-mobile-hero-maplink.png`, `screens/v2-mobile-balls-maplink.png`, `screens/v2-mobile-register-court.png`.
+
+### Not verified
+
+- Safari and Firefox. Safari has no canvas `filter`, so far balls there are not blurred (assumption, not tested).
+- Contrast was measured at 1440 x 900 only. The phone heading sits over the same scrim band.
+- Hover styles were not captured in a screenshot.
+- Frame rate on a low-end phone was not measured.
+- The server on port 8138 was stopped.

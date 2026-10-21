@@ -1,6 +1,7 @@
 // Page entry: hero title sequence, layered parallax, contour rings, reveals, lazy 3D, form.
 import { initForm, loadSlots } from "./form.js";
 import { initRings } from "./rings.js";
+import { initBallfall } from "./ballfall.js";
 
 const root = document.documentElement;
 const reduce = root.classList.contains("reduced-motion");
@@ -19,6 +20,9 @@ if (gsap && !reduce) {
 }
 initReveals();
 scheduleScene();
+initBallfall(document.getElementById("ballZone"), { animate: !reduce });
+loadCourt();
+if (!reduce) initCourt();
 
 /* Title sequence. The final pose is the CSS layout, so every load ends in the same place. */
 function playTitle() {
@@ -125,4 +129,37 @@ function scheduleScene() {
   const later = () => ("requestIdleCallback" in window ? requestIdleCallback(start, { timeout: 1500 }) : setTimeout(start, 600));
   if (document.readyState === "complete") later();
   else addEventListener("load", later, { once: true });
+}
+
+/* Court photo behind the form: slow drift inside the pinned frame. */
+function initCourt() {
+  const sec = document.getElementById("register");
+  const img = document.getElementById("courtImg");
+  if (!sec || !img) return;
+  let raf = 0, visible = false;
+  const apply = () => {
+    raf = 0;
+    const r = sec.getBoundingClientRect();
+    const vh = innerHeight || 1;
+    const p = Math.min(1, Math.max(0, (vh - r.top) / (r.height + vh)));
+    img.style.transform = `translate3d(0, ${(0.5 - p) * vh * 0.1}px, 0) scale(1.12)`;
+  };
+  const kick = () => { if (visible && !raf) raf = requestAnimationFrame(apply); };
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; kick(); }).observe(sec);
+  addEventListener("scroll", kick, { passive: true });
+}
+
+/* Load the court photo only when the form is near, so it never competes with the hero. */
+function loadCourt() {
+  const img = document.getElementById("courtImg");
+  const sec = document.getElementById("register");
+  if (!img || !sec) return;
+  const swap = () => {
+    img.closest("picture").querySelectorAll("source[data-srcset]").forEach((s) => { s.srcset = s.dataset.srcset; });
+    img.srcset = img.dataset.srcset;
+    img.src = img.dataset.src;
+  };
+  if (!("IntersectionObserver" in window)) { swap(); return; }
+  const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { io.disconnect(); swap(); } }, { rootMargin: "900px 0px" });
+  io.observe(sec);
 }
