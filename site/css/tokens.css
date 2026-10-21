@@ -1,0 +1,43 @@
+/* Design tokens. Palette sampled from the event poster. */
+:root {
+  --forest-950: #0e1a13;
+  --forest-900: #13241a;
+  --forest-800: #1a3024;
+  --forest-700: #1e3b2a;
+  --forest-500: #3c6b4f;
+  --maroon-800: #5e0808;
+  --maroon-700: #7d0b0b;
+  --maroon-500: #a52a22;
+  --gold-500: #c9a45c;
+  --gold-300: #e3c993;
+  --gold-100: #f4e8cf;
+  --dusk-700: #4a2230;
+  --dusk-400: #b8707a;
+  --rose-200: #f1c9c0;
+  --court-600: #2f5fd0;
+  --court-400: #5b8af0;
+  --paper: #f7f2e8;
+  --paper-2: #efe6d4;
+  --ink: #1a1714;
+  --ink-soft: #4a433b;
+  --white: #ffffff;
+  --lime: #d4e83a;
+
+  --text-on-dark: #f7f2e8;
+  --text-on-dark-soft: #d9cfbf;
+  --error: #b3261e;
+  --error-on-dark: #ffb4a9;
+  --success: #1e6b3f;
+
+  --font-display: "Montserrat", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+
+  --radius-s: 8px;
+  --radius-m: 14px;
+  --radius-l: 22px;
+  --shadow-card: 0 18px 40px -18px rgba(5, 10, 7, 0.55);
+  --gutter: clamp(16px, 4vw, 48px);
+  --max: 1180px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --tap: 44px;
+}

@@ -1,0 +1,5 @@
+receipt-checker/.env
+__pycache__/
+*.log
+reports/lighthouse/
+source/paddle-ref.webp
