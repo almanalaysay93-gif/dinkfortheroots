@@ -17,6 +17,9 @@ var EVENT_DATE_TEXT = 'Saturday, December 5, 2026';
 var EVENT_VENUE_TEXT = 'Pickle Park, Roxas Extension, Digos City';
 var CATEGORY_CAP = 40;
 var CLUB_NAME_MAX = 100;
+var FEE_TEXT = '₱1,200';
+var DRIVE_API = 'https://www.googleapis.com/drive/v3/files/';
+var DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
 var LOCK_WAIT_MS = 20000;
 var MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 var MAX_IMAGE_BASE64_CHARS = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 4;
@@ -524,6 +527,7 @@ function registerGuest_(body) {
   var player = validatePlayer_(body.player);
   var receipt = validateImage_(body.receipt, 'receipt', 'Receipt');
   var validId = validateImage_(body.validId, 'validId', 'Valid ID');
+  requireFeeOnReceipt_(receipt);
   var stored = withLock_(function () {
     return storeRegistration_(player, receipt, validId);
   });
@@ -540,6 +544,93 @@ function registerGuest_(body) {
     Logger.log('Could not record email status for ' + stored.ref + ': ' + err);
   }
   return { ok: true, ref: stored.ref };
+}
+
+// ---------------------------------------------------------------------------
+// Receipt amount (Google Drive OCR)
+// ---------------------------------------------------------------------------
+
+// Refuses a receipt whose text does not show 1,200. When OCR itself fails
+// (Drive outage, quota), the entry is accepted and left for the receipt checker.
+function requireFeeOnReceipt_(receipt) {
+  var text = readReceiptText_(receipt);
+  if (text === null) {
+    Logger.log('Receipt OCR unavailable. Accepted for the receipt checker.');
+    return;
+  }
+  if (!showsFee_(text)) {
+    throw invalid_('This receipt does not show ' + FEE_TEXT + '. Pay ' + FEE_TEXT
+      + ' and upload the full, unedited screenshot of that payment.', 'receipt.amount');
+  }
+}
+
+// Pure. True when the text holds the amount 1200: "1200", "1,200", "1 200", "1,200.00".
+// Not part of a bigger number (11,200 or 1,200.50).
+function showsFee_(text) {
+  var joined = String(text).replace(/(\d)[,\s](?=\d{3}(?!\d))/g, '$1');
+  return /(?<![\d.])1200(?:\.0{1,2})?(?![\d]|\.\d)/.test(joined);
+}
+
+// Run from the editor: reads the newest receipt in the receipts folder and logs
+// whether OCR found 1,200. Changes no data.
+function testReceiptOcr() {
+  var files = getReceiptFolder_().getFiles();
+  var newest = null;
+  while (files.hasNext()) {
+    var f = files.next();
+    if (!newest || f.getDateCreated() > newest.getDateCreated()) {
+      newest = f;
+    }
+  }
+  if (!newest) {
+    Logger.log('No receipt in the folder yet.');
+    return;
+  }
+  var blob = newest.getBlob();
+  var text = readReceiptText_({ mimeType: blob.getContentType(), bytes: blob.getBytes() });
+  Logger.log('File: ' + newest.getName());
+  Logger.log(text === null ? 'OCR unavailable.' : 'Shows 1,200: ' + showsFee_(text) + '\n' + text.slice(0, 300));
+}
+
+// Text of the image through Drive OCR, or null when OCR is unavailable.
+// The temporary Google Doc is deleted right after its text is read.
+function readReceiptText_(image) {
+  var auth = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };
+  var boundary = 'dfr' + Utilities.getUuid().replace(/-/g, '');
+  var meta = JSON.stringify({ name: 'dfr-receipt-ocr', mimeType: 'application/vnd.google-apps.document' });
+  var head = Utilities.newBlob('--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'
+    + meta + '\r\n--' + boundary + '\r\nContent-Type: ' + image.mimeType + '\r\n\r\n').getBytes();
+  var tail = Utilities.newBlob('\r\n--' + boundary + '--\r\n').getBytes();
+  try {
+    var upload = UrlFetchApp.fetch(DRIVE_UPLOAD_API + '?uploadType=multipart&ocrLanguage=en&fields=id', {
+      method: 'post',
+      contentType: 'multipart/related; boundary=' + boundary,
+      payload: head.concat(Array.prototype.slice.call(image.bytes), tail),
+      headers: auth,
+      muteHttpExceptions: true
+    });
+    if (upload.getResponseCode() !== 200) {
+      Logger.log('OCR upload returned HTTP ' + upload.getResponseCode());
+      return null;
+    }
+    var id = JSON.parse(upload.getContentText()).id;
+    try {
+      var exported = UrlFetchApp.fetch(DRIVE_API + id + '/export?mimeType=text/plain', {
+        headers: auth,
+        muteHttpExceptions: true
+      });
+      if (exported.getResponseCode() !== 200) {
+        Logger.log('OCR export returned HTTP ' + exported.getResponseCode());
+        return null;
+      }
+      return exported.getContentText();
+    } finally {
+      UrlFetchApp.fetch(DRIVE_API + id, { method: 'delete', headers: auth, muteHttpExceptions: true });
+    }
+  } catch (err) {
+    Logger.log('OCR failed: ' + err);
+    return null;
+  }
 }
 
 function withLock_(work) {

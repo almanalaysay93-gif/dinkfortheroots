@@ -165,7 +165,12 @@ function makeEnv(options = {}) {
     locked: false,
     lockBusy: false,
     mailFailWith: '',
-    posterMode: 'ok'
+    posterMode: 'ok',
+    // Drive OCR fake: 'ok' returns ocrText, 'uploadFail' answers HTTP 500, 'throw' throws.
+    ocrMode: 'ok',
+    ocrText: 'GoTyme Bank\nAmount ₱1,200.00\nRef No. 1234 567 890123',
+    ocrCalls: [],
+    ...(options.state || {})
   };
   if (options.withSheet !== false) {
     state.sheets[SHEET] = makeSheet(options.rows || [EXPECTED_HEADERS]);
@@ -218,7 +223,8 @@ function makeEnv(options = {}) {
         return Array.from(Buffer.from(s, 'base64'));
       },
       base64Encode: (bytes) => Buffer.from(bytes).toString('base64'),
-      newBlob: (bytes, mime, name) => makeBlob(Array.from(bytes), mime, name),
+      newBlob: (data, mime, name) => makeBlob(
+        typeof data === 'string' ? Array.from(Buffer.from(data, 'utf8')) : Array.from(data), mime, name),
       getUuid: () => randomUUID(),
       formatDate: (date) => date.toISOString()
     },
@@ -251,8 +257,23 @@ function makeEnv(options = {}) {
         state.mails.push({ ...options, lockedAtSend: state.locked });
       }
     },
+    ScriptApp: { getOAuthToken: () => 'test-token' },
     UrlFetchApp: {
-      fetch(url) {
+      fetch(url, opts = {}) {
+        if (url.startsWith('https://www.googleapis.com/')) {
+          state.ocrCalls.push({ url, method: opts.method || 'get' });
+          if (state.ocrMode === 'throw') {
+            throw new Error('Drive unavailable');
+          }
+          if (url.includes('/upload/')) {
+            const code = state.ocrMode === 'uploadFail' ? 500 : 200;
+            return { getResponseCode: () => code, getContentText: () => JSON.stringify({ id: 'ocr-doc-1' }) };
+          }
+          if (url.includes('/export')) {
+            return { getResponseCode: () => 200, getContentText: () => state.ocrText };
+          }
+          return { getResponseCode: () => 204, getContentText: () => '' };
+        }
         state.fetches.push(url);
         if (state.posterMode === 'throw') {
           throw new Error('fetch failed');
@@ -1152,4 +1173,50 @@ test('refs returns only checked rows with their reference and hash', () => {
   const res = call(env, { action: 'refs', key: ADMIN_KEY });
   assert.equal(res.ok, true);
   assert.deepEqual(res.refs, [{ ref: first.ref, referenceNo: 'REF-1', imageHash: 'hash-1' }]);
+});
+
+// ---------------------------------------------------------------------------
+// Receipt amount (Drive OCR)
+// ---------------------------------------------------------------------------
+
+test('showsFee_ finds 1200 in the usual receipt formats', () => {
+  const env = makeEnv();
+  const yes = ['Amount ₱1,200.00', 'PHP 1200', 'P1 200.00', 'Total: 1,200', 'Sent\n1,200.0\nto Diana'];
+  const no = ['Amount ₱1,000.00', '₱11,200.00', '₱1,200.50', '12000', 'Ref 412003', '₱2,400.00', ''];
+  for (const t of yes) assert.equal(env.ctx.showsFee_(t), true, t);
+  for (const t of no) assert.equal(env.ctx.showsFee_(t), false, t);
+});
+
+test('register refuses a receipt that does not show 1,200 and saves nothing', () => {
+  const env = makeEnv({ state: { ocrText: 'GoTyme Bank\nAmount ₱1,000.00' } });
+  const res = register(env);
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'INVALID');
+  assert.equal(res.field, 'receipt.amount');
+  assert.match(res.message, /₱1,200/);
+  assert.equal(env.state.sheets[SHEET].rows.length, 1, 'no row appended');
+  assert.equal(env.state.mails.length, 0, 'no email sent');
+});
+
+test('register reads the receipt through Drive OCR and deletes the temporary doc', () => {
+  const env = makeEnv();
+  const res = register(env);
+  assert.equal(res.ok, true);
+  const methods = env.state.ocrCalls.map((c) => c.method + ' ' + c.url.replace(/\?.*/, ''));
+  assert.deepEqual(methods, [
+    'post https://www.googleapis.com/upload/drive/v3/files',
+    'get https://www.googleapis.com/drive/v3/files/ocr-doc-1/export',
+    'delete https://www.googleapis.com/drive/v3/files/ocr-doc-1'
+  ]);
+  assert.ok(env.state.ocrCalls[0].url.includes('ocrLanguage=en'));
+});
+
+test('register accepts the entry when OCR is unavailable', () => {
+  for (const ocrMode of ['uploadFail', 'throw']) {
+    const env = makeEnv({ state: { ocrMode } });
+    const res = register(env);
+    assert.equal(res.ok, true, ocrMode);
+    assert.equal(env.state.sheets[SHEET].rows.length, 2, ocrMode);
+    assert.ok(env.state.logs.some((l) => /OCR/.test(l)), ocrMode);
+  }
 });

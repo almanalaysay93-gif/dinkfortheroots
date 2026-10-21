@@ -63,6 +63,7 @@ GET `ENDPOINT?action=slots` also works and returns the same as POST `slots`.
 
 1. `{ action:"slots" }` → `{ ok:true, open:<bool>, closesAt:"2026-11-20T23:59:59+08:00", slots:{ "novice-mens":{taken:n,cap:40}, ... } }`. `taken` counts rows with status not `Rejected`.
 2. `{ action:"register", player:{ fullName, email, phone, municipality, barangay, category, partnerName, clubName, shirtSize, paymentRef }, receipt:{ fileName, mimeType, base64 }, validId:{ fileName, mimeType, base64 }, consent:true }`
+   - The receipt must show ₱1,200: Drive OCR (Drive API with the script token, temporary Google Doc deleted after reading) must find 1200 / 1,200 / 1,200.00 in the text, else `{ ok:false, error:"INVALID", field:"receipt.amount" }`. When OCR fails, the entry is accepted and the receipt checker reviews it.
    - After the cut-off → `{ ok:false, error:"CLOSED" }`, checked before any other validation. `clubName` optional, 0 to 100 chars. `validId` same rules as `receipt`, saved to Drive folder `Dink for the Roots Valid IDs` as `<ref>-ID-<fileName>`, private.`
    - Validates every field (email format, phone `09XXXXXXXXX` or `+639XXXXXXXXX`, municipality in list, category in list, shirt in list, receipt mime `image/jpeg|image/png|image/webp`, decoded size ≤ 5 MB, consent true).
    - Duplicate rule: same email in same category → `{ ok:true, duplicate:true, ref:<existing> }`.

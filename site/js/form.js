@@ -304,6 +304,11 @@ async function send(form, payload) {
     } else if (res && res.error === "FULL") {
       showStatus("err", `<h3>This category is full</h3><p>The last slot was taken before your entry arrived. Choose another category if one is open.</p>`);
       loadSlots();
+    } else if (res && res.error === "INVALID" && res.field === "receipt.amount") {
+      // Retrying the same file cannot pass, so no retry button: the player must choose another receipt.
+      setError("receipt", res.message);
+      showStatus("err", `<h3>Receipt amount not found</h3><p>${esc(res.message)}</p>`);
+      lastPayload = null;
     } else {
       const msg = res && res.message ? esc(res.message) : "The server could not save your entry.";
       showStatus("err", `<h3>Registration not saved</h3><p>${msg}</p><button type="button" class="btn btn--maroon btn--small" data-retry>Try again</button>`);
