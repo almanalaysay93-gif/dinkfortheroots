@@ -80,7 +80,7 @@ def load_config(path, require_endpoint):
         if not admin_key:
             raise ConfigError("ADMIN_KEY in .env is empty.")
     try:
-        expected_amount = float(values.get("EXPECTED_AMOUNT", "1000"))
+        expected_amount = float(values.get("EXPECTED_AMOUNT", "1200"))
     except ValueError:
         raise ConfigError("EXPECTED_AMOUNT must be a number.")
     try:

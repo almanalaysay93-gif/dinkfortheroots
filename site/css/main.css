@@ -169,16 +169,16 @@ html.anim-pending .title__sub, html.anim-pending .brand__logos, html.anim-pendin
 .small { font-size: .9rem; color: var(--text-on-dark-soft); }
 .demo-note { margin-top: 16px; display: inline-block; padding: 6px 12px; border-radius: 8px; border: 1px dashed var(--gold-500); color: var(--gold-100); font-size: .9rem; }
 
-.facts { margin: 40px 0 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; border-radius: var(--radius-l); overflow: hidden; background: rgba(227, 201, 147, .22); }
+.facts { margin: 40px 0 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; border-radius: var(--radius-l); overflow: hidden; background: rgba(227, 201, 147, .22); }
 .fact { background: var(--forest-900); padding: 24px 22px; }
 .fact dt { font: 800 .78rem/1.2 var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--gold-300); }
 .fact dd { margin: 10px 0 0; font-size: 1.08rem; font-weight: 600; }
-@media (max-width: 900px) { .facts { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 900px) { .facts { grid-template-columns: 1fr 1fr; } .fact:last-child:nth-child(odd) { grid-column: 1 / -1; } }
 @media (max-width: 520px) { .facts { grid-template-columns: 1fr; } }
 
 .pill { display: inline-block; padding: 5px 14px; border-radius: 999px; background: var(--gold-500); color: var(--maroon-800); font: 900 .78rem/1.2 var(--font-display); letter-spacing: .1em; text-transform: uppercase; }
 .pill--maroon { background: var(--maroon-700); color: var(--gold-100); }
-.cats { list-style: none; margin: 40px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.cats { list-style: none; margin: 40px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .cat {
   position: relative; padding: 24px 22px 22px; border-radius: var(--radius-l);
   background: linear-gradient(160deg, rgba(247, 242, 232, .08), rgba(247, 242, 232, .02));
@@ -235,7 +235,7 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--c
 .err { font-size: .9rem; font-weight: 600; color: var(--error); min-height: 0; }
 .err:empty { display: none; }
 
-.radio-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.radio-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 @media (max-width: 900px) { .radio-cards { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 400px) { .radio-cards { grid-template-columns: 1fr; } }
 .rcard { position: relative; display: block; cursor: pointer; }

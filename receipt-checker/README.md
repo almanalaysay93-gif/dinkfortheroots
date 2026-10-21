@@ -23,7 +23,7 @@ Copy `.env.example` to `.env`.
 Open `.env` in Notepad.
 Set `ENDPOINT` to the web app address. It ends with `/exec`.
 Set `ADMIN_KEY` to the admin key. It must match the `ADMIN_KEY` script property in Apps Script.
-Keep `EXPECTED_AMOUNT` at `1000` unless the fee changes.
+Keep `EXPECTED_AMOUNT` at `1200` unless the fee changes.
 Set `EXPECTED_RECIPIENT` to part of the organizer account name or number. Leave it empty to skip this check.
 
 Do not share the `.env` file.

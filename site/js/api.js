@@ -5,14 +5,22 @@ export const CATEGORIES = [
   { key: "novice-mens", label: "Novice Men's Doubles" },
   { key: "novice-womens", label: "Novice Women's Doubles" },
   { key: "novice-mixed", label: "Novice Mixed Doubles" },
-  { key: "rookie", label: "Rookie Doubles" },
+  { key: "rookie-mens", label: "Rookie Men's Doubles" },
+  { key: "rookie-womens", label: "Rookie Women's Doubles" },
+  { key: "rookie-mixed", label: "Rookie Mixed Doubles" },
 ];
-export const CAP = 36;
+export const CAP = 40;
+export const CUTOFF_ISO = "2026-11-20T23:59:59+08:00";
+const CUTOFF_MS = Date.parse(CUTOFF_ISO);
 
 export const isDemo = () => !CONFIG.ENDPOINT;
+export const isPastCutoff = () => Date.now() > CUTOFF_MS;
 
 const DEMO_KEY = "dfr-demo-registrations";
-const DEMO_BASE = { "novice-mens": 20, "novice-womens": 12, "novice-mixed": 26, "rookie": 8 };
+const DEMO_BASE = {
+  "novice-mens": 18, "novice-womens": 10, "novice-mixed": 22,
+  "rookie-mens": 14, "rookie-womens": 9, "rookie-mixed": 16,
+};
 
 function readDemo() {
   try { return JSON.parse(localStorage.getItem(DEMO_KEY) || "[]"); } catch { return []; }
@@ -45,7 +53,7 @@ export async function getSlots() {
       const mine = rows.filter((r) => r.category === key).length;
       slots[key] = { taken: Math.min(CAP, DEMO_BASE[key] + mine), cap: CAP };
     }
-    return { ok: true, open: true, slots };
+    return { ok: true, open: !isPastCutoff(), closesAt: CUTOFF_ISO, slots };
   }
   const res = await fetch(CONFIG.ENDPOINT + (CONFIG.ENDPOINT.includes("?") ? "&" : "?") + "action=slots");
   if (!res.ok) throw new Error("HTTP " + res.status);
@@ -54,6 +62,9 @@ export async function getSlots() {
 
 export async function register(payload) {
   if (isDemo()) {
+    if (isPastCutoff()) {
+      return { ok: false, error: "CLOSED", message: "Registration closed on November 20, 2026 at 11:59 PM." };
+    }
     await new Promise((r) => setTimeout(r, 900));
     const rows = readDemo();
     const p = payload.player;

@@ -1,6 +1,6 @@
 # Dink for the Roots
 
-> A pickleball fundraising tournament for indigenous communities. Saturday, December 5, 2026, at Pickle Park, Roxas Extension, Digos City. ₱1,000 per player. Davao del Sur residents only.
+> A pickleball fundraising tournament for indigenous communities. Saturday, December 5, 2026, at Pickle Park, Roxas Extension, Digos City. ₱1,200 per player. Davao del Sur residents only. Registration closes November 20, 2026, 11:59 PM.
 
 Dink for the Roots is a one-day pickleball fundraising tournament for indigenous communities.
 The event is on Saturday, December 5, 2026.
@@ -9,17 +9,21 @@ The venue is Pickle Park, Roxas Extension, Digos City, Davao del Sur, Philippine
 The tournament is exclusive to residents of Davao del Sur.
 
 Registration uses one form per player.
-Each player pays ₱1,000 and names a partner.
+Each player pays ₱1,200 and names a partner.
 Each player registers separately.
+Each player uploads a valid ID photo. A club name is optional.
+Registration closes on November 20, 2026, at 11:59 PM (Asia/Manila). After the cut-off, the form is closed.
 
 ## Categories
 
-- Novice Men's Doubles: 18 pairs
-- Novice Women's Doubles: 18 pairs
-- Novice Mixed Doubles: 18 pairs
-- Rookie Doubles: 18 pairs, one bracket
+- Novice Men's Doubles: 20 pairs
+- Novice Women's Doubles: 20 pairs
+- Novice Mixed Doubles: 20 pairs
+- Rookie Men's Doubles: 20 pairs
+- Rookie Women's Doubles: 20 pairs
+- Rookie Mixed Doubles: 20 pairs
 
-Slots count players. Each category has 36 player slots.
+Slots count players. Each category has 40 player slots.
 
 ## Inclusions
 
@@ -35,7 +39,7 @@ Every player gets:
 
 ## Prizes
 
-Each Novice category and the Rookie category award the same prizes:
+Each of the 6 categories awards the same prizes:
 
 - Champion: ₱5,000
 - Silver: ₱3,000

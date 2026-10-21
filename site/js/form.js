@@ -1,6 +1,6 @@
-// Registration form: slots, shirt size guide, payment QR, receipt, validation, submit.
+// Registration form: slots, shirt size guide, payment QR, uploads, validation, submit.
 import { CONFIG } from "./config.js";
-import { CATEGORIES, CAP, getSlots, isDemo, register } from "./api.js";
+import { CATEGORIES, CAP, getSlots, isDemo, isPastCutoff, register } from "./api.js";
 
 const SIZES = [
   ["K8", 13, 17.5], ["K10", 13.5, 18.5], ["K12", 14.5, 19.5], ["K14", 15, 20], ["K16", 16, 21.5],
@@ -15,12 +15,27 @@ const TYPES = ["image/jpeg", "image/png", "image/webp"];
 const PHONE_RE = /^(09\d{9}|\+639\d{9})$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const LGUS = ["Digos City", "Bansalan", "Hagonoy", "Kiblawan", "Magsaysay", "Malalag", "Matanao", "Padada", "Santa Cruz", "Sulop"];
+const CLUB_MAX = 100;
+
+// One entry per file upload. Ids match index.html.
+const UPLOADS = {
+  receipt: {
+    input: "receipt", zone: "dropZone", thumb: "receiptThumb", name: "receiptName",
+    size: "receiptSize", file: "dropFile", missing: "Upload your payment receipt screenshot.",
+  },
+  validId: {
+    input: "validId", zone: "idDropZone", thumb: "idThumb", name: "idName",
+    size: "idSize", file: "idFile", missing: "Upload a photo of your valid ID.",
+  },
+};
+const UPLOAD_KEYS = Object.keys(UPLOADS);
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const peso = (n) => "₱" + n.toLocaleString("en-PH");
 
 let slotState = null;
-let receiptFile = null;
+let closed = false;
+const uploads = { receipt: null, validId: null };
 let lastPayload = null;
 
 /* ---------- Slots ---------- */
@@ -30,7 +45,9 @@ export async function loadSlots() {
     const res = await getSlots();
     if (!res || !res.ok) throw new Error(res && res.message || "slots");
     slotState = res.slots;
-    renderSlots(res.slots, res.open !== false);
+    const open = res.open !== false && !isPastCutoff();
+    renderSlots(res.slots, open);
+    if (!open) applyClosed();
     if (isDemo()) { note.textContent = "Preview mode. Slot counts are sample numbers."; note.hidden = false; }
   } catch {
     document.querySelectorAll("[data-slots]").forEach((el) => { el.textContent = "Slot count unavailable right now."; });
@@ -47,9 +64,11 @@ function renderSlots(slots, open) {
     const card = document.querySelector(`.cat[data-cat="${key}"]`);
     if (card) {
       card.classList.toggle("is-full", full);
-      card.querySelector("[data-slots]").innerHTML = full
-        ? "Full. No slots left."
-        : `<strong>${leftPairs}</strong> of ${capPairs} pairs left`;
+      card.querySelector("[data-slots]").innerHTML = !open
+        ? "Registration closed."
+        : full
+          ? "Full. No slots left."
+          : `<strong>${leftPairs}</strong> of ${capPairs} pairs left`;
       card.querySelector(".meter span").style.width = Math.min(100, (s.taken / cap) * 100) + "%";
     }
     const radio = document.querySelector(`input[name="category"][value="${key}"]`);
@@ -58,8 +77,16 @@ function renderSlots(slots, open) {
       radio.disabled = full;
       if (full && radio.checked) radio.checked = false;
     }
-    if (label) label.textContent = full ? "Full" : `${leftPairs} of ${capPairs} pairs left`;
+    if (label) label.textContent = !open ? "Closed" : full ? "Full" : `${leftPairs} of ${capPairs} pairs left`;
   }
+}
+
+// Registration is closed: the server said so, or the browser clock is past the cut-off.
+function applyClosed() {
+  closed = true;
+  $("#formStatus").innerHTML = "";
+  $("#regForm").querySelectorAll("input, select, textarea, button").forEach((el) => { el.disabled = true; });
+  $("#closedNote").hidden = false;
 }
 
 /* ---------- Shirt sizes ---------- */
@@ -110,7 +137,7 @@ function buildQr() {
   if (!CONFIG.PAYMENT_QR) { soon(); }
   else {
     const img = new Image();
-    img.alt = "Payment QR code for the ₱1,000 registration fee";
+    img.alt = `Payment QR code for the ${peso(CONFIG.FEE)} registration fee`;
     img.width = 260; img.height = 260;
     img.onload = () => { frame.replaceChildren(img); };
     img.onerror = soon;
@@ -121,42 +148,47 @@ function buildQr() {
   document.querySelectorAll(".pay__fee strong").forEach((el) => { el.textContent = peso(CONFIG.FEE); });
 }
 
-/* ---------- Receipt ---------- */
-function buildReceipt() {
-  const input = $("#receipt");
-  const drop = $("#dropZone");
-  input.addEventListener("change", () => setReceipt(input.files && input.files[0]));
-  ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("is-over"); }));
-  ["dragleave", "drop"].forEach((t) => drop.addEventListener(t, () => drop.classList.remove("is-over")));
-  drop.addEventListener("drop", (e) => {
-    e.preventDefault();
-    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) setReceipt(f);
-  });
+/* ---------- Uploads (receipt and valid ID) ---------- */
+const zoneOf = (key) => document.getElementById(UPLOADS[key].zone);
+
+function buildUploads() {
+  for (const key of UPLOAD_KEYS) {
+    const input = document.getElementById(UPLOADS[key].input);
+    const zone = zoneOf(key);
+    input.addEventListener("change", () => setUpload(key, input.files && input.files[0]));
+    ["dragenter", "dragover"].forEach((t) => zone.addEventListener(t, (e) => { e.preventDefault(); zone.classList.add("is-over"); }));
+    ["dragleave", "drop"].forEach((t) => zone.addEventListener(t, () => zone.classList.remove("is-over")));
+    zone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) setUpload(key, f);
+    });
+  }
 }
 
-function setReceipt(file) {
-  const thumb = $("#receiptThumb");
+function setUpload(key, file) {
+  const cfg = UPLOADS[key];
+  const thumb = document.getElementById(cfg.thumb);
   if (thumb.src.startsWith("blob:")) URL.revokeObjectURL(thumb.src);
-  receiptFile = null;
-  $("#dropFile").hidden = true;
-  $(".drop__idle").hidden = false;
+  uploads[key] = null;
+  document.getElementById(cfg.file).hidden = true;
+  zoneOf(key).querySelector(".drop__idle").hidden = false;
   if (!file) return;
-  const problem = receiptProblem(file);
-  if (problem) { setError("receipt", problem); return; }
-  clearError("receipt");
-  receiptFile = file;
+  const problem = fileProblem(file);
+  if (problem) { setError(key, problem); return; }
+  clearError(key);
+  uploads[key] = file;
   thumb.src = URL.createObjectURL(file);
-  $("#receiptName").textContent = file.name;
-  $("#receiptSize").textContent = (file.size / 1024 / 1024).toFixed(2) + " MB · tap to change";
-  $("#dropFile").hidden = false;
-  $(".drop__idle").hidden = true;
+  document.getElementById(cfg.name).textContent = file.name;
+  document.getElementById(cfg.size).textContent = (file.size / 1024 / 1024).toFixed(2) + " MB · tap to change";
+  document.getElementById(cfg.file).hidden = false;
+  zoneOf(key).querySelector(".drop__idle").hidden = true;
 }
 
-function receiptProblem(file) {
+function fileProblem(file) {
   if (!TYPES.includes(file.type)) return "Use a JPG, PNG, or WEBP image.";
   if (file.size > MAX_BYTES) return "The image is larger than 5 MB. Upload the original screenshot from your phone.";
-  if (file.size === 0) return "The file is empty. Choose the screenshot again.";
+  if (file.size === 0) return "The file is empty. Choose the image again.";
   return "";
 }
 
@@ -181,14 +213,14 @@ function setError(name, msg) {
   if (err) err.textContent = msg;
   const el = document.getElementById(name);
   if (el) el.setAttribute("aria-invalid", "true");
-  if (name === "receipt") $("#dropZone").classList.add("is-invalid");
+  if (UPLOADS[name]) zoneOf(name).classList.add("is-invalid");
 }
 function clearError(name) {
   const err = document.getElementById(name + "-err");
   if (err) err.textContent = "";
   const el = document.getElementById(name);
   if (el) el.removeAttribute("aria-invalid");
-  if (name === "receipt") $("#dropZone").classList.remove("is-invalid");
+  if (UPLOADS[name]) zoneOf(name).classList.remove("is-invalid");
 }
 
 const normPhone = (v) => v.replace(/[\s-]/g, "");
@@ -204,6 +236,7 @@ function collect(form) {
     barangay: v("barangay"),
     category: v("category"),
     partnerName: v("partnerName"),
+    clubName: v("clubName"),
     shirtSize: v("shirtSize"),
     paymentRef: v("paymentRef"),
     consent: fd.get("consent") === "on",
@@ -217,17 +250,21 @@ function validate(p) {
   if (!PHONE_RE.test(p.phone)) errors.phone = "Use 09XXXXXXXXX or +639XXXXXXXXX.";
   if (p.partnerName.length < 3) errors.partnerName = "Enter your partner's full name.";
   else if (p.partnerName.toLowerCase() === p.fullName.toLowerCase()) errors.partnerName = "Your partner must be a different person.";
+  if (p.clubName.length > CLUB_MAX) errors.clubName = `Use ${CLUB_MAX} characters or fewer.`;
   if (!LGUS.includes(p.municipality)) errors.municipality = "Choose your city or municipality in Davao del Sur.";
   if (p.barangay.length < 2) errors.barangay = "Enter your barangay.";
   if (!CATEGORIES.some((c) => c.key === p.category)) errors.category = "Choose a category.";
   if (!SIZES.some((s) => s[0] === p.shirtSize)) errors.shirtSize = "Choose a shirt size.";
-  if (!receiptFile) errors.receipt = "Upload your payment receipt screenshot.";
-  else { const pr = receiptProblem(receiptFile); if (pr) errors.receipt = pr; }
+  for (const key of UPLOAD_KEYS) {
+    const f = uploads[key];
+    if (!f) errors[key] = UPLOADS[key].missing;
+    else { const pr = fileProblem(f); if (pr) errors[key] = pr; }
+  }
   if (!p.consent) errors.consent = "Check this box to continue.";
   return errors;
 }
 
-const ORDER = ["fullName", "email", "phone", "partnerName", "municipality", "barangay", "category", "shirtSize", "receipt", "consent"];
+const ORDER = ["fullName", "email", "phone", "partnerName", "clubName", "municipality", "barangay", "category", "shirtSize", "receipt", "validId", "consent"];
 
 /* ---------- Status UI ---------- */
 function showStatus(kind, html) {
@@ -238,7 +275,7 @@ function showStatus(kind, html) {
 }
 function setBusy(on) {
   const btn = $("#submitBtn");
-  btn.disabled = on;
+  btn.disabled = on || closed;
   btn.classList.toggle("is-busy", on);
   btn.setAttribute("aria-busy", String(on));
   btn.querySelector(".btn__label").textContent = on ? "Submitting…" : "Submit registration";
@@ -254,14 +291,16 @@ async function send(form, payload) {
       showStatus("warn", `<h3>You are already registered</h3><p>This email already has an entry in this category.</p><p>Your reference: <span class="ref">${esc(res.ref)}</span></p>`);
     } else if (res && res.ok) {
       const name = esc(payload.player.fullName.split(" ")[0]);
-      showStatus("ok", `<h3>Registration received, ${name}</h3><p>Your reference: <span class="ref">${esc(res.ref)}</span></p><p>A confirmation email with the event poster is on its way to ${esc(payload.player.email)}. The organizers will check your receipt and email you if anything is missing.</p><p>Ask your partner to fill their own form.</p>`);
+      showStatus("ok", `<h3>Registration received, ${name}</h3><p>Your reference: <span class="ref">${esc(res.ref)}</span></p><p>Your valid ID was received.</p><p>A confirmation email with the event poster is on its way to ${esc(payload.player.email)}. The organizers will check your receipt and email you if anything is missing.</p><p>Ask your partner to fill their own form.</p>`);
       form.reset();
-      setReceipt(null);
+      for (const key of UPLOAD_KEYS) setUpload(key, null);
       $("#sizeGuide").hidden = true;
       $("#sizeHl").classList.remove("is-on");
       $("#sizeRead").textContent = "Choose a size to see its measurements.";
       lastPayload = null;
       loadSlots();
+    } else if (res && res.error === "CLOSED") {
+      applyClosed();
     } else if (res && res.error === "FULL") {
       showStatus("err", `<h3>This category is full</h3><p>The last slot was taken before your entry arrived. Choose another category if one is open.</p>`);
       loadSlots();
@@ -280,12 +319,13 @@ export function initForm() {
   const form = $("#regForm");
   buildSizes();
   buildQr();
-  buildReceipt();
+  buildUploads();
   if (isDemo()) $("#demoNote").hidden = false;
+  if (isPastCutoff()) applyClosed();
 
-  // Clear an error as soon as the field changes.
-  form.addEventListener("input", (e) => { const n = e.target.name; if (n && n !== "receipt") clearError(n); });
-  form.addEventListener("change", (e) => { const n = e.target.name; if (n && n !== "receipt") clearError(n); });
+  // Clear an error as soon as the field changes. Uploads clear their own error on a new file.
+  form.addEventListener("input", (e) => { const n = e.target.name; if (n && !UPLOADS[n]) clearError(n); });
+  form.addEventListener("change", (e) => { const n = e.target.name; if (n && !UPLOADS[n]) clearError(n); });
 
   $("#formStatus").addEventListener("click", (e) => {
     if (e.target.closest("[data-retry]") && lastPayload) send(form, lastPayload);
@@ -308,13 +348,17 @@ export function initForm() {
       }
       return;
     }
-    let base64;
-    try { base64 = await fileToBase64(receiptFile); }
-    catch { setError("receipt", "The image could not be read. Choose it again."); fieldEl("receipt").focus(); return; }
+    const base64 = {};
+    for (const key of UPLOAD_KEYS) {
+      try { base64[key] = await fileToBase64(uploads[key]); }
+      catch { setError(key, "The image could not be read. Choose it again."); fieldEl(key).focus(); return; }
+    }
     const { consent, ...player } = p;
+    const upload = (key) => ({ fileName: uploads[key].name, mimeType: uploads[key].type, base64: base64[key] });
     lastPayload = {
       player,
-      receipt: { fileName: receiptFile.name, mimeType: receiptFile.type, base64 },
+      receipt: upload("receipt"),
+      validId: upload("validId"),
       consent,
     };
     send(form, lastPayload);

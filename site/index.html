@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Dink for the Roots · Pickleball Fundraising Tournament · Digos City</title>
-  <meta name="description" content="Register for Dink for the Roots, a pickleball fundraising tournament for indigenous communities. Saturday, December 5, 2026 at Pickle Park, Roxas Extension, Digos City. ₱1,000 per player. Davao del Sur residents only.">
+  <meta name="description" content="Register for Dink for the Roots, a pickleball fundraising tournament for indigenous communities. Saturday, December 5, 2026 at Pickle Park, Roxas Extension, Digos City. ₱1,200 per player. Novice and Rookie Men's, Women's, and Mixed Doubles, 20 pairs per category. Registration closes November 20, 2026. Davao del Sur residents only.">
   <meta name="theme-color" content="#1e3b2a">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Dink for the Roots · Pickleball Fundraising Tournament">
-  <meta property="og:description" content="December 5, 2026 · Pickle Park, Roxas Extension, Digos City. Novice and Rookie doubles, 18 pairs per category. ₱1,000 per player.">
+  <meta property="og:description" content="December 5, 2026 · Pickle Park, Roxas Extension, Digos City. Novice and Rookie Men's, Women's, and Mixed Doubles, 20 pairs per category. ₱1,200 per player. Registration closes November 20, 2026.">
   <link rel="canonical" href="https://dinkfortheroots.redirectme.net/">
   <meta property="og:url" content="https://dinkfortheroots.redirectme.net/">
   <meta property="og:image" content="https://dinkfortheroots.redirectme.net/assets/poster.jpg">
@@ -92,7 +92,7 @@
           </ul>
           <div class="hero__cta">
             <a class="btn btn--gold" href="#register">Register a player</a>
-            <p class="hero__note">₱1,000 per player · Davao del Sur residents only</p>
+            <p class="hero__note">₱1,200 per player · Davao del Sur residents only · Registration closes November 20, 2026, 11:59 PM</p>
           </div>
         </div>
       </div>
@@ -122,7 +122,11 @@
           </div>
           <div class="fact">
             <dt>Fee</dt>
-            <dd>₱1,000 per player. Each player registers separately and names a partner.</dd>
+            <dd>₱1,200 per player. Each player registers separately and names a partner.</dd>
+          </div>
+          <div class="fact">
+            <dt>Cut-off</dt>
+            <dd>Registration closes November 20, 2026, 11:59 PM</dd>
           </div>
         </dl>
       </div>
@@ -131,14 +135,16 @@
     <section class="section section--cats" id="categories" aria-labelledby="cats-h">
       <div class="wrap">
         <p class="eyebrow">Categories</p>
-        <h2 id="cats-h" class="h2">18 pairs per category</h2>
-        <p class="lede">Novice has three doubles categories. Rookie is one bracket. Slots count players, 36 per category.</p>
+        <h2 id="cats-h" class="h2">20 pairs per category</h2>
+        <p class="lede">Novice and Rookie each have Men's, Women's, and Mixed Doubles. Slots count players, 40 per category.</p>
         <p class="demo-note" id="slotsNote" hidden></p>
         <ul class="cats reveal" id="catList">
           <li class="cat" data-cat="novice-mens"><span class="pill">Novice</span><h3>Men's Doubles</h3><p class="cat__slots" data-slots>Checking slots…</p><div class="meter"><span></span></div></li>
           <li class="cat" data-cat="novice-womens"><span class="pill">Novice</span><h3>Women's Doubles</h3><p class="cat__slots" data-slots>Checking slots…</p><div class="meter"><span></span></div></li>
           <li class="cat" data-cat="novice-mixed"><span class="pill">Novice</span><h3>Mixed Doubles</h3><p class="cat__slots" data-slots>Checking slots…</p><div class="meter"><span></span></div></li>
-          <li class="cat" data-cat="rookie"><span class="pill pill--maroon">Rookie</span><h3>Rookie Doubles</h3><p class="cat__slots" data-slots>Checking slots…</p><div class="meter"><span></span></div></li>
+          <li class="cat" data-cat="rookie-mens"><span class="pill pill--maroon">Rookie</span><h3>Men's Doubles</h3><p class="cat__slots" data-slots>Checking slots…</p><div class="meter"><span></span></div></li>
+          <li class="cat" data-cat="rookie-womens"><span class="pill pill--maroon">Rookie</span><h3>Women's Doubles</h3><p class="cat__slots" data-slots>Checking slots…</p><div class="meter"><span></span></div></li>
+          <li class="cat" data-cat="rookie-mixed"><span class="pill pill--maroon">Rookie</span><h3>Mixed Doubles</h3><p class="cat__slots" data-slots>Checking slots…</p><div class="meter"><span></span></div></li>
         </ul>
       </div>
     </section>
@@ -168,7 +174,7 @@
             <li class="podium__step podium__step--2"><span class="podium__place">Silver</span><span class="podium__amt">₱3,000</span></li>
             <li class="podium__step podium__step--3"><span class="podium__place">Bronze</span><span class="podium__amt">₱2,000</span></li>
           </ol>
-          <p class="small">Same prizes in Novice Men's, Novice Women's, Novice Mixed, and Rookie.</p>
+          <p class="small">Same prizes in all 6 categories: Novice and Rookie Men's, Women's, and Mixed Doubles.</p>
         </div>
       </div>
     </section>
@@ -190,6 +196,9 @@
         <p class="demo-note" id="demoNote" hidden>Preview mode. Entries stay in this browser and are not sent to the organizers.</p>
 
         <form class="form" id="regForm" novalidate>
+          <div class="notice notice--warn" id="closedNote" role="status" hidden>
+            <p>Registration is closed. The cut-off was November 20, 2026, 11:59 PM.</p>
+          </div>
           <fieldset class="form__group">
             <legend class="form__legend"><span class="step">1</span> Player</legend>
             <div class="grid2">
@@ -214,6 +223,12 @@
                 <label for="partnerName">Partner's full name</label>
                 <input id="partnerName" name="partnerName" type="text" autocomplete="off" required maxlength="120" aria-describedby="partnerName-err">
                 <p class="err" id="partnerName-err"></p>
+              </div>
+              <div class="field">
+                <label for="clubName">Club name (optional)</label>
+                <input id="clubName" name="clubName" type="text" autocomplete="organization" maxlength="100" aria-describedby="clubName-hint clubName-err">
+                <p class="hint" id="clubName-hint">Leave blank if you have no club.</p>
+                <p class="err" id="clubName-err"></p>
               </div>
               <div class="field">
                 <label for="municipality">City or municipality (Davao del Sur)</label>
@@ -246,7 +261,9 @@
               <label class="rcard"><input type="radio" name="category" value="novice-mens" required><span class="rcard__body"><span class="rcard__kicker">Novice</span><span class="rcard__title">Men's Doubles</span><span class="rcard__slots" data-rslots="novice-mens"></span></span></label>
               <label class="rcard"><input type="radio" name="category" value="novice-womens"><span class="rcard__body"><span class="rcard__kicker">Novice</span><span class="rcard__title">Women's Doubles</span><span class="rcard__slots" data-rslots="novice-womens"></span></span></label>
               <label class="rcard"><input type="radio" name="category" value="novice-mixed"><span class="rcard__body"><span class="rcard__kicker">Novice</span><span class="rcard__title">Mixed Doubles</span><span class="rcard__slots" data-rslots="novice-mixed"></span></span></label>
-              <label class="rcard"><input type="radio" name="category" value="rookie"><span class="rcard__body"><span class="rcard__kicker">Rookie</span><span class="rcard__title">Rookie Doubles</span><span class="rcard__slots" data-rslots="rookie"></span></span></label>
+              <label class="rcard"><input type="radio" name="category" value="rookie-mens"><span class="rcard__body"><span class="rcard__kicker">Rookie</span><span class="rcard__title">Men's Doubles</span><span class="rcard__slots" data-rslots="rookie-mens"></span></span></label>
+              <label class="rcard"><input type="radio" name="category" value="rookie-womens"><span class="rcard__body"><span class="rcard__kicker">Rookie</span><span class="rcard__title">Women's Doubles</span><span class="rcard__slots" data-rslots="rookie-womens"></span></span></label>
+              <label class="rcard"><input type="radio" name="category" value="rookie-mixed"><span class="rcard__body"><span class="rcard__kicker">Rookie</span><span class="rcard__title">Mixed Doubles</span><span class="rcard__slots" data-rslots="rookie-mixed"></span></span></label>
             </div>
             <p class="err" id="category-err"></p>
           </fieldset>
@@ -272,10 +289,10 @@
 
           <fieldset class="form__group" aria-describedby="pay-hint">
             <legend class="form__legend"><span class="step">4</span> Payment</legend>
-            <p class="hint" id="pay-hint">Pay ₱1,000 for this player using the QR code, then upload a screenshot of your receipt.</p>
+            <p class="hint" id="pay-hint">Pay ₱1,200 for this player using the QR code, then upload a screenshot of your receipt.</p>
             <div class="pay">
               <div class="pay__qr" id="payQr">
-                <p class="pay__fee"><span>Amount</span><strong>₱1,000</strong></p>
+                <p class="pay__fee"><span>Amount</span><strong>₱1,200</strong></p>
                 <div class="qr-frame" id="qrFrame"></div>
                 <p class="pay__label" id="payLabel" hidden></p>
               </div>
@@ -301,6 +318,22 @@
                   <p class="hint" id="receipt-hint">JPG, PNG, or WEBP, up to 5 MB. Upload the original screenshot. Do not edit or crop it.</p>
                   <p class="err" id="receipt-err"></p>
                 </div>
+                <div class="field">
+                  <span class="label" id="validId-label">Valid ID photo</span>
+                  <label class="drop" for="validId" id="idDropZone">
+                    <input id="validId" name="validId" type="file" accept="image/jpeg,image/png,image/webp" required aria-labelledby="validId-label" aria-describedby="validId-hint validId-err">
+                    <span class="drop__idle">
+                      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+                      <span><strong>Choose image</strong> or drop it here</span>
+                    </span>
+                    <span class="drop__file" id="idFile" hidden>
+                      <img id="idThumb" alt="Valid ID preview" width="72" height="72">
+                      <span class="drop__meta"><span id="idName"></span><span id="idSize" class="small"></span></span>
+                    </span>
+                  </label>
+                  <p class="hint" id="validId-hint">Photo of one valid government or school ID with your name. JPG, PNG, or WEBP, up to 5 MB.</p>
+                  <p class="err" id="validId-err"></p>
+                </div>
               </div>
             </div>
           </fieldset>
@@ -314,7 +347,7 @@
 
             <div class="submit-row">
               <button class="btn btn--maroon btn--wide" type="submit" id="submitBtn"><span class="btn__label">Submit registration</span><span class="spinner" aria-hidden="true"></span></button>
-              <p class="small">Fee: ₱1,000 per player</p>
+              <p class="small">Fee: ₱1,200 per player. Registration closes November 20, 2026, 11:59 PM.</p>
             </div>
             <div class="status" id="formStatus" role="status" aria-live="polite" tabindex="-1"></div>
           </div>

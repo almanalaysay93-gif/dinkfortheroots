@@ -8,15 +8,18 @@ var SHEET_NAME = 'Registrations';
 // Used when the script is standalone (not opened from the Sheet's Extensions menu).
 var SHEET_ID = '1nU4mEsdvNxyiP4gskgR2rZKjcnXwO9tcI4cob9Cv2YA';
 var RECEIPT_FOLDER_NAME = 'Dink for the Roots Receipts';
+var VALID_ID_FOLDER_NAME = 'Dink for the Roots Valid IDs';
 var SENDER_NAME = 'Dink for the Roots';
 var TIME_ZONE = 'Asia/Manila';
-var DEFAULT_ORGANIZER_EMAIL = 'ibanezdianarose9@gmail.com';
+var DEFAULT_ORGANIZER_EMAILS = ['ibanezdianarose9@gmail.com', 'aceyorkbasilan@gmail.com'];
+var CUTOFF_ISO = '2026-11-20T23:59:59+08:00';
 var EVENT_DATE_TEXT = 'Saturday, December 5, 2026';
 var EVENT_VENUE_TEXT = 'Pickle Park, Roxas Extension, Digos City';
-var CATEGORY_CAP = 36;
+var CATEGORY_CAP = 40;
+var CLUB_NAME_MAX = 100;
 var LOCK_WAIT_MS = 20000;
-var MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
-var MAX_BASE64_CHARS = Math.ceil(MAX_RECEIPT_BYTES / 3) * 4 + 4;
+var MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+var MAX_IMAGE_BASE64_CHARS = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 4;
 var OCR_TEXT_MAX = 4000;
 var PENDING_BATCH_SIZE = 10;
 var POSTER_FILE_NAME = 'Dink-for-the-Roots-poster.jpg';
@@ -27,13 +30,25 @@ var REF_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 var REF_LENGTH = 6;
 var REF_PATTERN = /^DFR-[A-HJ-NP-Z2-9]{6}$/;
 var VERDICTS = ['Verified', 'Needs review', 'Suspect'];
-var RECEIPT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+var IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+var PARTNER_NOTE = 'Partner names do not match exactly. Check.';
 
 var CATEGORIES = {
   'novice-mens': "Novice Men's Doubles",
   'novice-womens': "Novice Women's Doubles",
   'novice-mixed': 'Novice Mixed Doubles',
-  'rookie': 'Rookie Doubles'
+  'rookie-mens': "Rookie Men's Doubles",
+  'rookie-womens': "Rookie Women's Doubles",
+  'rookie-mixed': 'Rookie Mixed Doubles'
+};
+
+var CATEGORY_TABS = {
+  'novice-mens': "Novice Men's",
+  'novice-womens': "Novice Women's",
+  'novice-mixed': 'Novice Mixed',
+  'rookie-mens': "Rookie Men's",
+  'rookie-womens': "Rookie Women's",
+  'rookie-mixed': 'Rookie Mixed'
 };
 
 var SHIRT_SIZES = ['K8', 'K10', 'K12', 'K14', 'K16', 'K18', 'K20', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
@@ -45,10 +60,15 @@ var MUNICIPALITIES = [
 
 var HEADERS = [
   'Ref', 'Submitted At', 'Status', 'Full Name', 'Email', 'Phone', 'Municipality',
-  'Barangay', 'Category', 'Partner Name', 'Shirt Size', 'Payment Ref (player)',
-  'Receipt File ID', 'Receipt URL', 'Verdict', 'OCR Amount', 'OCR Reference No',
-  'OCR Txn Date', 'OCR Sender', 'OCR Recipient', 'Tamper Score', 'Flags',
+  'Barangay', 'Category', 'Partner Name', 'Club Name', 'Shirt Size', 'Payment Ref (player)',
+  'Receipt File ID', 'Receipt URL', 'Valid ID File ID', 'Valid ID URL', 'Verdict', 'OCR Amount',
+  'OCR Reference No', 'OCR Txn Date', 'OCR Sender', 'OCR Recipient', 'Tamper Score', 'Flags',
   'Image Hash', 'Checked At', 'OCR Text', 'Player Email Sent', 'Organizer Email Sent'
+];
+
+var PAIR_HEADERS = [
+  'Pair No', 'Pair Status', 'Player 1', 'P1 Ref', 'P1 Status', 'P1 Club', 'P1 Phone', 'P1 Email', 'P1 Shirt',
+  'Player 2', 'P2 Ref', 'P2 Status', 'P2 Club', 'P2 Phone', 'P2 Email', 'P2 Shirt', 'Note'
 ];
 
 // ---------------------------------------------------------------------------
@@ -151,7 +171,7 @@ function parseBody_(e) {
 function setup() {
   var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
-  if (sheet.getLastRow() === 0) {
+  if (sheet.getLastRow() <= 1) {
     sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
   } else {
     var current = sheet.getRange(1, 1, 1, HEADERS.length).getValues()[0];
@@ -162,9 +182,10 @@ function setup() {
   sheet.setFrozenRows(1);
 
   var props = PropertiesService.getScriptProperties();
-  ensureReceiptFolder_(props);
+  ensureFolder_(props, 'RECEIPT_FOLDER_ID', RECEIPT_FOLDER_NAME);
+  ensureFolder_(props, 'VALID_ID_FOLDER_ID', VALID_ID_FOLDER_NAME);
   if (!props.getProperty('ORGANIZER_EMAIL')) {
-    props.setProperty('ORGANIZER_EMAIL', DEFAULT_ORGANIZER_EMAIL);
+    props.setProperty('ORGANIZER_EMAIL', DEFAULT_ORGANIZER_EMAILS.join(', '));
   }
   if (!props.getProperty('POSTER_URL')) {
     props.setProperty('POSTER_URL', '');
@@ -172,6 +193,7 @@ function setup() {
   if (!props.getProperty('ADMIN_KEY')) {
     props.setProperty('ADMIN_KEY', Utilities.getUuid());
   }
+  rebuildCategoryTabs_();
   Logger.log('ADMIN_KEY: ' + props.getProperty('ADMIN_KEY'));
   Logger.log('Setup complete. Set POSTER_URL in Project Settings > Script properties.');
 }
@@ -182,13 +204,13 @@ function sameHeaders_(current) {
   });
 }
 
-function ensureReceiptFolder_(props) {
-  if (props.getProperty('RECEIPT_FOLDER_ID')) {
+function ensureFolder_(props, propName, folderName) {
+  if (props.getProperty(propName)) {
     return;
   }
-  var folders = DriveApp.getFoldersByName(RECEIPT_FOLDER_NAME);
-  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(RECEIPT_FOLDER_NAME);
-  props.setProperty('RECEIPT_FOLDER_ID', folder.getId());
+  var folders = DriveApp.getFoldersByName(folderName);
+  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+  props.setProperty(propName, folder.getId());
 }
 
 // ---------------------------------------------------------------------------
@@ -254,8 +276,16 @@ function findDuplicate_(rows, player) {
 }
 
 // ---------------------------------------------------------------------------
-// Slots
+// Slots and registration window
 // ---------------------------------------------------------------------------
+
+function now_() {
+  return new Date();
+}
+
+function isOpen_() {
+  return now_().getTime() <= Date.parse(CUTOFF_ISO);
+}
 
 function getSlots_() {
   var rows = readRows_(getSheet_());
@@ -263,7 +293,7 @@ function getSlots_() {
   Object.keys(CATEGORIES).forEach(function (key) {
     slots[key] = { taken: countCategory_(rows, key), cap: CATEGORY_CAP };
   });
-  return { ok: true, open: true, slots: slots };
+  return { ok: true, open: isOpen_(), closesAt: CUTOFF_ISO, slots: slots };
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +310,7 @@ function validatePlayer_(input) {
     barangay: requireText_(p.barangay, 2, 80, 'barangay', 'Barangay'),
     category: requireCategory_(p.category),
     partnerName: requireText_(p.partnerName, 2, 100, 'partnerName', 'Partner name'),
+    clubName: optionalText_(p.clubName, CLUB_NAME_MAX, 'clubName', 'Club name'),
     shirtSize: requireOption_(p.shirtSize, SHIRT_SIZES, 'shirtSize', 'Shirt size'),
     paymentRef: requireText_(p.paymentRef, 3, 60, 'paymentRef', 'Payment reference')
   };
@@ -297,8 +328,21 @@ function requireText_(value, min, max, field, label) {
   return text;
 }
 
+function optionalText_(value, max, field, label) {
+  var text = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+  if (text.length > max) {
+    throw invalid_(label + ' must be ' + max + ' characters or fewer.', field);
+  }
+  return text;
+}
+
 function normalizeName_(value) {
   return String(value).toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// Letters and digits only, single spaces. Used to pair partners on the tabs.
+function pairName_(value) {
+  return String(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
 function requireEmail_(value) {
@@ -342,29 +386,30 @@ function requireCategory_(value) {
   return value;
 }
 
-function validateReceipt_(input) {
+// Shared by the payment receipt (fieldPrefix "receipt") and the valid ID (fieldPrefix "validId").
+function validateImage_(input, fieldPrefix, label) {
   var r = input && typeof input === 'object' ? input : {};
-  var fileName = requireText_(r.fileName, 1, 120, 'receipt.fileName', 'Receipt file name');
-  if (RECEIPT_MIME_TYPES.indexOf(r.mimeType) < 0) {
-    throw invalid_('Receipt must be a JPEG, PNG, or WebP image.', 'receipt.mimeType');
-  }
   if (typeof r.base64 !== 'string' || r.base64.length === 0) {
-    throw invalid_('Receipt file is missing.', 'receipt.base64');
+    throw invalid_(label + ' file is missing.', fieldPrefix + '.base64');
   }
-  if (r.base64.length > MAX_BASE64_CHARS) {
-    throw invalid_('Receipt is larger than 5 MB.', 'receipt.base64');
+  var fileName = requireText_(r.fileName, 1, 120, fieldPrefix + '.fileName', label + ' file name');
+  if (IMAGE_MIME_TYPES.indexOf(r.mimeType) < 0) {
+    throw invalid_(label + ' must be a JPEG, PNG, or WebP image.', fieldPrefix + '.mimeType');
+  }
+  if (r.base64.length > MAX_IMAGE_BASE64_CHARS) {
+    throw invalid_(label + ' is larger than 5 MB.', fieldPrefix + '.base64');
   }
   var bytes;
   try {
     bytes = Utilities.base64Decode(r.base64);
   } catch (err) {
-    throw invalid_('Receipt file is not valid base64.', 'receipt.base64');
+    throw invalid_(label + ' file is not valid base64.', fieldPrefix + '.base64');
   }
-  if (bytes.length > MAX_RECEIPT_BYTES) {
-    throw invalid_('Receipt is larger than 5 MB.', 'receipt.base64');
+  if (bytes.length > MAX_IMAGE_BYTES) {
+    throw invalid_(label + ' is larger than 5 MB.', fieldPrefix + '.base64');
   }
   if (sniffMime_(bytes) !== r.mimeType) {
-    throw invalid_('Receipt content does not match its file type.', 'receipt.mimeType');
+    throw invalid_(label + ' content does not match its file type.', fieldPrefix + '.mimeType');
   }
   return { fileName: fileName, mimeType: r.mimeType, bytes: bytes };
 }
@@ -451,7 +496,7 @@ function uniqueRef_(existingRefs) {
 }
 
 function formatNow_() {
-  return Utilities.formatDate(new Date(), TIME_ZONE, 'yyyy-MM-dd HH:mm:ss');
+  return Utilities.formatDate(now_(), TIME_ZONE, 'yyyy-MM-dd HH:mm:ss');
 }
 
 function getProperty_(name) {
@@ -470,18 +515,22 @@ function requireAdmin_(key) {
 // ---------------------------------------------------------------------------
 
 function registerGuest_(body) {
+  if (!isOpen_()) {
+    throw apiError_('CLOSED', 'Registration closed on November 20, 2026 at 11:59 PM.');
+  }
   if (body.consent !== true) {
     throw invalid_('Consent is required.', 'consent');
   }
   var player = validatePlayer_(body.player);
-  var receipt = validateReceipt_(body.receipt);
+  var receipt = validateImage_(body.receipt, 'receipt', 'Receipt');
+  var validId = validateImage_(body.validId, 'validId', 'Valid ID');
   var stored = withLock_(function () {
-    return storeRegistration_(player, receipt);
+    return storeRegistration_(player, receipt, validId);
   });
   if (stored.duplicate) {
     return { ok: true, duplicate: true, ref: stored.ref };
   }
-  var status = sendRegistrationEmails_(stored.ref, player, stored.receiptUrl);
+  var status = sendRegistrationEmails_(stored.ref, player, stored);
   try {
     updateRow_(getSheet_(), stored.row, {
       'Player Email Sent': status.player,
@@ -507,7 +556,7 @@ function withLock_(work) {
   }
 }
 
-function storeRegistration_(player, receipt) {
+function storeRegistration_(player, receipt, validId) {
   var sheet = getSheet_();
   var rows = readRows_(sheet);
   var existing = findDuplicate_(rows, player);
@@ -520,12 +569,20 @@ function storeRegistration_(player, receipt) {
   var ref = uniqueRef_(rows.map(function (row) {
     return row.Ref;
   }));
-  var file = saveReceipt_(ref, receipt);
-  sheet.appendRow(rowFromObject_(buildRecord_(ref, player, file)));
-  return { duplicate: false, ref: ref, row: sheet.getLastRow(), receiptUrl: file.getUrl() };
+  var receiptFile = saveFile_(getReceiptFolder_(), ref + '-' + sanitizeFileName_(receipt.fileName), receipt);
+  var validIdFile = saveFile_(getValidIdFolder_(), ref + '-ID-' + sanitizeFileName_(validId.fileName), validId);
+  sheet.appendRow(rowFromObject_(buildRecord_(ref, player, receiptFile, validIdFile)));
+  rebuildTabsSafely_(player.category);
+  return {
+    duplicate: false,
+    ref: ref,
+    row: sheet.getLastRow(),
+    receiptUrl: receiptFile.getUrl(),
+    validIdUrl: validIdFile.getUrl()
+  };
 }
 
-function buildRecord_(ref, player, file) {
+function buildRecord_(ref, player, receiptFile, validIdFile) {
   return {
     'Ref': ref,
     'Submitted At': formatNow_(),
@@ -538,10 +595,13 @@ function buildRecord_(ref, player, file) {
     'Barangay': safeCell_(player.barangay),
     'Category': CATEGORIES[player.category],
     'Partner Name': safeCell_(player.partnerName),
+    'Club Name': safeCell_(player.clubName),
     'Shirt Size': player.shirtSize,
     'Payment Ref (player)': textCell_(player.paymentRef),
-    'Receipt File ID': file.getId(),
-    'Receipt URL': file.getUrl()
+    'Receipt File ID': receiptFile.getId(),
+    'Receipt URL': receiptFile.getUrl(),
+    'Valid ID File ID': validIdFile.getId(),
+    'Valid ID URL': validIdFile.getUrl()
   };
 }
 
@@ -557,10 +617,14 @@ function getReceiptFolder_() {
   return DriveApp.getFolderById(id);
 }
 
-function saveReceipt_(ref, receipt) {
-  var folder = getReceiptFolder_();
-  var name = ref + '-' + sanitizeFileName_(receipt.fileName);
-  var blob = Utilities.newBlob(receipt.bytes, receipt.mimeType, name);
+// Created on first use if setup() has not run yet.
+function getValidIdFolder_() {
+  ensureFolder_(PropertiesService.getScriptProperties(), 'VALID_ID_FOLDER_ID', VALID_ID_FOLDER_NAME);
+  return DriveApp.getFolderById(getProperty_('VALID_ID_FOLDER_ID'));
+}
+
+function saveFile_(folder, fileName, upload) {
+  var blob = Utilities.newBlob(upload.bytes, upload.mimeType, fileName);
   var file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
   return file;
@@ -570,13 +634,13 @@ function saveReceipt_(ref, receipt) {
 // Emails (sent after the lock is released)
 // ---------------------------------------------------------------------------
 
-function sendRegistrationEmails_(ref, player, receiptUrl) {
+function sendRegistrationEmails_(ref, player, stored) {
   return {
     player: sendSafely_(function () {
       sendPlayerEmail_(ref, player);
     }),
     organizer: sendSafely_(function () {
-      sendOrganizerEmail_(ref, player, receiptUrl);
+      sendOrganizerEmail_(ref, player, stored);
     })
   };
 }
@@ -624,22 +688,35 @@ function fetchPoster_() {
   }
 }
 
+function clubPairs_(player) {
+  return player.clubName ? [['Club', player.clubName]] : [];
+}
+
+function playerPairs_(ref, player) {
+  return [
+    ['Reference', ref],
+    ['Category', CATEGORIES[player.category]],
+    ['Partner', player.partnerName]
+  ].concat(clubPairs_(player), [
+    ['Shirt size', player.shirtSize],
+    ['Date', EVENT_DATE_TEXT],
+    ['Venue', EVENT_VENUE_TEXT]
+  ]);
+}
+
 function playerEmailText_(ref, player, posterAttached) {
   var lines = [
     'Hi ' + player.fullName + ',',
     '',
     'Thank you for registering for Dink for the Roots, a pickleball fundraising tournament for Indigenous communities.',
-    '',
-    'Reference: ' + ref,
-    'Category: ' + CATEGORIES[player.category],
-    'Partner: ' + player.partnerName,
-    'Shirt size: ' + player.shirtSize,
-    'Date: ' + EVENT_DATE_TEXT,
-    'Venue: ' + EVENT_VENUE_TEXT,
+    ''
+  ].concat(playerPairs_(ref, player).map(function (pair) {
+    return pair[0] + ': ' + pair[1];
+  }), [
     '',
     'Your payment receipt will be checked. If anything is wrong with it, we will email you.',
     'Keep your reference number for your records.'
-  ];
+  ]);
   if (posterAttached) {
     lines.push('', 'The event poster is attached to this email.');
   }
@@ -647,14 +724,7 @@ function playerEmailText_(ref, player, posterAttached) {
 }
 
 function playerEmailHtml_(ref, player, posterAttached) {
-  var rows = htmlRows_([
-    ['Reference', ref],
-    ['Category', CATEGORIES[player.category]],
-    ['Partner', player.partnerName],
-    ['Shirt size', player.shirtSize],
-    ['Date', EVENT_DATE_TEXT],
-    ['Venue', EVENT_VENUE_TEXT]
-  ]);
+  var rows = htmlRows_(playerPairs_(ref, player));
   var poster = posterAttached ? '<p>The event poster is attached to this email.</p>' : '';
   return '<div style="font-family:Arial,Helvetica,sans-serif;color:#1d1d1d;max-width:560px;">'
     + '<h2 style="margin:0 0 12px;">Dink for the Roots</h2>'
@@ -674,8 +744,20 @@ function htmlRows_(pairs) {
   }).join('');
 }
 
-function sendOrganizerEmail_(ref, player, receiptUrl) {
-  var to = getProperty_('ORGANIZER_EMAIL') || DEFAULT_ORGANIZER_EMAIL;
+// Default addresses plus ORGANIZER_EMAIL (comma-separated), lowercased, no duplicates.
+function organizerRecipients_() {
+  var configured = getProperty_('ORGANIZER_EMAIL').split(',');
+  var all = DEFAULT_ORGANIZER_EMAILS.concat(configured).map(function (address) {
+    return address.trim().toLowerCase();
+  }).filter(function (address) {
+    return address.length > 0;
+  });
+  return all.filter(function (address, i) {
+    return all.indexOf(address) === i;
+  });
+}
+
+function sendOrganizerEmail_(ref, player, stored) {
   var sheetUrl = getSpreadsheet_().getUrl();
   var pairs = [
     ['Reference', ref],
@@ -685,12 +767,14 @@ function sendOrganizerEmail_(ref, player, receiptUrl) {
     ['Municipality', player.municipality],
     ['Barangay', player.barangay],
     ['Category', CATEGORIES[player.category]],
-    ['Partner', player.partnerName],
+    ['Partner', player.partnerName]
+  ].concat(clubPairs_(player), [
     ['Shirt size', player.shirtSize],
     ['Payment ref', player.paymentRef],
-    ['Receipt', receiptUrl],
+    ['Receipt', stored.receiptUrl],
+    ['Valid ID', stored.validIdUrl],
     ['Sheet', sheetUrl]
-  ];
+  ]);
   var note = 'Status: Pending check. The receipt checker will process it.';
   var text = pairs.map(function (pair) {
     return pair[0] + ': ' + pair[1];
@@ -700,12 +784,142 @@ function sendOrganizerEmail_(ref, player, receiptUrl) {
     + '<table style="border-collapse:collapse;">' + htmlRows_(pairs) + '</table>'
     + '<p>' + escapeHtml_(note) + '</p></div>';
   MailApp.sendEmail({
-    to: to,
+    to: organizerRecipients_().join(', '),
     subject: 'New registration ' + ref + ' (' + CATEGORIES[player.category] + ')',
     body: text,
     htmlBody: html,
     name: SENDER_NAME
   });
+}
+
+// ---------------------------------------------------------------------------
+// Category tabs (derived from Registrations, rebuilt after each change)
+// ---------------------------------------------------------------------------
+
+function rebuildTabs() {
+  rebuildCategoryTabs_();
+}
+
+function rebuildTabsSafely_(onlyKey) {
+  try {
+    rebuildCategoryTabs_(onlyKey);
+  } catch (err) {
+    Logger.log('Category tab rebuild failed: ' + err);
+  }
+}
+
+// onlyKey: rebuild one category tab. Omitted: rebuild all six.
+function rebuildCategoryTabs_(onlyKey) {
+  var ss = getSpreadsheet_();
+  var rows = readRows_(getSheet_());
+  Object.keys(CATEGORY_TABS).filter(function (key) {
+    return !onlyKey || key === onlyKey;
+  }).forEach(function (key) {
+    var name = CATEGORY_TABS[key];
+    var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+    var values = buildPairs_(rows, key);
+    sheet.clearContents();
+    sheet.getRange(1, 1, values.length, PAIR_HEADERS.length).setValues(values);
+    sheet.setFrozenRows(1);
+  });
+}
+
+// Pure. Returns the tab values: a header row, then one row per pair or waiting player.
+function buildPairs_(rows, categoryKey) {
+  var label = CATEGORIES[categoryKey];
+  var players = rows.filter(function (row) {
+    return row.Category === label && row.Status !== REJECTED_STATUS;
+  });
+  var used = players.map(function () {
+    return false;
+  });
+  // partnerOf[i] = index of the partner, exact[i] = both names match
+  var partnerOf = players.map(function () {
+    return -1;
+  });
+  var exact = players.map(function () {
+    return false;
+  });
+  // Exact pairs first, so a one-way match cannot take a player whose exact partner comes later.
+  [true, false].forEach(function (mutual) {
+    players.forEach(function (player, i) {
+      if (used[i]) {
+        return;
+      }
+      used[i] = true;
+      var j = findPartner_(players, used, i, mutual);
+      if (j >= 0) {
+        used[j] = true;
+        partnerOf[i] = j;
+        partnerOf[j] = i;
+        exact[i] = exact[j] = mutual;
+      } else {
+        used[i] = false;
+      }
+    });
+  });
+  var out = [PAIR_HEADERS];
+  var written = players.map(function () {
+    return false;
+  });
+  players.forEach(function (player, i) {
+    if (written[i]) {
+      return;
+    }
+    written[i] = true;
+    var j = partnerOf[i];
+    if (j >= 0) {
+      written[j] = true;
+    }
+    out.push(pairRow_(out.length, player, j >= 0 ? players[j] : null, exact[i]));
+  });
+  return out;
+}
+
+// mutual = true: both names match. mutual = false: either name matches.
+function findPartner_(players, used, index, mutual) {
+  var me = players[index];
+  for (var j = 0; j < players.length; j++) {
+    if (used[j]) {
+      continue;
+    }
+    var other = players[j];
+    var namesOther = pairName_(me['Partner Name']) === pairName_(other['Full Name']);
+    var namedByOther = pairName_(other['Partner Name']) === pairName_(me['Full Name']);
+    if (mutual ? namesOther && namedByOther : namesOther || namedByOther) {
+      return j;
+    }
+  }
+  return -1;
+}
+
+function pairRow_(pairNo, first, second, exact) {
+  var status = 'Complete';
+  var note = '';
+  if (!second) {
+    status = 'Waiting for partner';
+    note = 'Named partner: ' + first['Partner Name'];
+  } else if (!exact) {
+    note = PARTNER_NOTE;
+  }
+  return [pairNo, status]
+    .concat(playerCells_(first), playerCells_(second))
+    .concat([safeCell_(note)]);
+}
+
+function playerCells_(row) {
+  if (!row) {
+    return ['', '', '', '', '', '', ''];
+  }
+  return [
+    safeCell_(row['Full Name']),
+    row.Ref,
+    row.Status,
+    safeCell_(row['Club Name']),
+    textCell_(String(row.Phone).replace(/^'/, '')),
+    safeCell_(row.Email),
+    row['Shirt Size']
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -767,6 +981,11 @@ function verifyRegistration_(ref, result) {
     'Checked At': safeCell_(result.checkedAt || formatNow_()),
     'OCR Text': safeCell_(String(result.ocrText || '').slice(0, OCR_TEXT_MAX))
   });
+  var categoryKey = Object.keys(CATEGORIES).find(function (key) {
+    return CATEGORIES[key] === row.Category;
+  });
+  // A row with an unknown category label still gets checked; then all tabs are rebuilt.
+  rebuildTabsSafely_(categoryKey);
   return { ok: true, ref: ref, status: result.verdict };
 }
 

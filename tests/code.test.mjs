@@ -12,9 +12,20 @@ const CODE = readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'u
 const SHEET = 'Registrations';
 const ADMIN_KEY = 'test-admin-key';
 const REF_PATTERN = /^DFR-[A-HJ-NP-Z2-9]{6}$/;
+const CUTOFF_ISO = '2026-11-20T23:59:59+08:00';
+const DEFAULT_ORGANIZERS = ['ibanezdianarose9@gmail.com', 'aceyorkbasilan@gmail.com'];
 
 // Written out here on purpose, separate from Code.gs, so a header change is caught.
 const EXPECTED_HEADERS = [
+  'Ref', 'Submitted At', 'Status', 'Full Name', 'Email', 'Phone', 'Municipality',
+  'Barangay', 'Category', 'Partner Name', 'Club Name', 'Shirt Size', 'Payment Ref (player)',
+  'Receipt File ID', 'Receipt URL', 'Valid ID File ID', 'Valid ID URL', 'Verdict', 'OCR Amount',
+  'OCR Reference No', 'OCR Txn Date', 'OCR Sender', 'OCR Recipient', 'Tamper Score', 'Flags',
+  'Image Hash', 'Checked At', 'OCR Text', 'Player Email Sent', 'Organizer Email Sent'
+];
+
+// The header before CR1 (27 columns), used to test the setup migration.
+const OLD_HEADERS = [
   'Ref', 'Submitted At', 'Status', 'Full Name', 'Email', 'Phone', 'Municipality',
   'Barangay', 'Category', 'Partner Name', 'Shirt Size', 'Payment Ref (player)',
   'Receipt File ID', 'Receipt URL', 'Verdict', 'OCR Amount', 'OCR Reference No',
@@ -22,11 +33,18 @@ const EXPECTED_HEADERS = [
   'Image Hash', 'Checked At', 'OCR Text', 'Player Email Sent', 'Organizer Email Sent'
 ];
 
+const PAIR_HEADERS = [
+  'Pair No', 'Pair Status', 'Player 1', 'P1 Ref', 'P1 Status', 'P1 Club', 'P1 Phone', 'P1 Email', 'P1 Shirt',
+  'Player 2', 'P2 Ref', 'P2 Status', 'P2 Club', 'P2 Phone', 'P2 Email', 'P2 Shirt', 'Note'
+];
+
 const LABEL = {
   'novice-mens': "Novice Men's Doubles",
   'novice-womens': "Novice Women's Doubles",
   'novice-mixed': 'Novice Mixed Doubles',
-  'rookie': 'Rookie Doubles'
+  'rookie-mens': "Rookie Men's Doubles",
+  'rookie-womens': "Rookie Women's Doubles",
+  'rookie-mixed': 'Rookie Mixed Doubles'
 };
 
 const JPEG = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01];
@@ -47,6 +65,9 @@ function makeSheet(initialRows) {
     getLastRow: () => rows.length,
     appendRow(values) {
       rows.push(values.slice());
+    },
+    clearContents() {
+      rows.length = 0;
     },
     setFrozenRows(n) {
       this.frozen = n;
@@ -108,6 +129,7 @@ function makeFolder(name, id, state) {
       const file = {
         id: fileId,
         blob,
+        folderName: name,
         access: null,
         permission: null,
         getId: () => fileId,
@@ -274,6 +296,10 @@ function slotsGet(env) {
   return JSON.parse(env.ctx.doGet({ parameter: { action: 'slots' } }).getContent());
 }
 
+function setNow(env, iso) {
+  env.ctx.now_ = () => new Date(iso);
+}
+
 function validPlayer(overrides = {}) {
   return {
     fullName: 'Juan Dela Cruz',
@@ -298,11 +324,21 @@ function validReceipt(overrides = {}) {
   };
 }
 
+function validId(overrides = {}) {
+  return {
+    fileName: 'id.jpg',
+    mimeType: 'image/jpeg',
+    base64: b64(JPEG),
+    ...overrides
+  };
+}
+
 function registerBody(player = {}, receipt = {}, extra = {}) {
   return {
     action: 'register',
     player: validPlayer(player),
     receipt: validReceipt(receipt),
+    validId: validId(),
     consent: true,
     ...extra
   };
@@ -340,11 +376,33 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function mailTo(env, address) {
+  return env.state.mails.find((m) => m.to === address);
+}
+
+function organizerMail(env) {
+  return env.state.mails.find((m) => m.subject.startsWith('New registration'));
+}
+
+// A row object keyed by header name, for the pure pairing function.
+function pRow(fields) {
+  const row = {};
+  EXPECTED_HEADERS.forEach((h) => {
+    row[h] = '';
+  });
+  return Object.assign(row, {
+    Status: 'Pending check',
+    Category: LABEL['novice-mens'],
+    Phone: "'+639171234567",
+    'Shirt Size': 'M'
+  }, fields);
+}
+
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
-test('setup creates the header in contract order and freezes row 1', () => {
+test('setup creates the header in contract order, the tabs, and both folders', () => {
   const env = makeEnv({ withSheet: false, withFolder: false });
   for (const key of ['ADMIN_KEY', 'ORGANIZER_EMAIL', 'POSTER_URL', 'RECEIPT_FOLDER_ID']) {
     delete env.state.props[key];
@@ -355,39 +413,51 @@ test('setup creates the header in contract order and freezes row 1', () => {
   const sheet = env.state.sheets[SHEET];
   assert.deepEqual(plain(sheet.rows[0]), EXPECTED_HEADERS);
   assert.equal(sheet.frozen, 1);
-  assert.equal(env.state.folders.length, 1);
-  assert.equal(env.state.folders[0].name, 'Dink for the Roots Receipts');
+  assert.deepEqual(env.state.folders.map((f) => f.name), [
+    'Dink for the Roots Receipts',
+    'Dink for the Roots Valid IDs'
+  ]);
   assert.equal(env.state.props.RECEIPT_FOLDER_ID, env.state.folders[0].id);
-  assert.equal(env.state.props.ORGANIZER_EMAIL, 'ibanezdianarose9@gmail.com');
+  assert.equal(env.state.props.VALID_ID_FOLDER_ID, env.state.folders[1].id);
+  assert.equal(env.state.props.ORGANIZER_EMAIL, DEFAULT_ORGANIZERS.join(', '));
   assert.equal(env.state.props.POSTER_URL, '');
   assert.match(env.state.props.ADMIN_KEY, /^[0-9a-f-]{36}$/);
   assert.ok(env.state.logs.some((l) => l.includes(env.state.props.ADMIN_KEY)));
+  assert.ok(env.state.sheets["Novice Men's"], 'category tab created');
+  assert.ok(env.state.sheets['Rookie Mixed'], 'category tab created');
 });
 
-test('setup keeps an existing admin key and reuses the receipt folder', () => {
+test('setup keeps an existing admin key and reuses both folders', () => {
   const env = makeEnv();
   env.ctx.setup();
   env.ctx.setup();
   assert.equal(env.state.props.ADMIN_KEY, ADMIN_KEY);
-  assert.equal(env.state.folders.length, 1);
+  assert.equal(env.state.folders.length, 2);
 });
 
-test('setup refuses a sheet whose header row differs from the contract', () => {
-  const env = makeEnv({ rows: [['Wrong', 'Header']] });
+test('setup writes the new header over an old header when the sheet has no data rows', () => {
+  const env = makeEnv({ rows: [OLD_HEADERS] });
+  env.ctx.setup();
+  assert.deepEqual(plain(env.state.sheets[SHEET].rows[0]), EXPECTED_HEADERS);
+});
+
+test('setup refuses a sheet whose header row differs from the contract when data rows exist', () => {
+  const env = makeEnv({ rows: [OLD_HEADERS, seedRow({ Ref: 'SEED0' })] });
   assert.throws(() => env.ctx.setup(), /does not match the contract header/);
 });
 
 // ---------------------------------------------------------------------------
-// Slots
+// Slots and cut-off
 // ---------------------------------------------------------------------------
 
-test('slots returns zero counts for an empty sheet with cap 36', () => {
+test('slots returns zero counts for an empty sheet with cap 40', () => {
   const env = makeEnv();
   const res = slotsGet(env);
   assert.equal(res.ok, true);
   assert.equal(res.open, true);
+  assert.equal(res.closesAt, CUTOFF_ISO);
   for (const key of Object.keys(LABEL)) {
-    assert.deepEqual(res.slots[key], { taken: 0, cap: 36 });
+    assert.deepEqual(res.slots[key], { taken: 0, cap: 40 });
   }
 });
 
@@ -402,12 +472,52 @@ test('slots counts rows that are not Rejected', () => {
       EXPECTED_HEADERS,
       ...seedRegistrations(2, {}),
       ...seedRegistrations(1, { Status: 'Rejected' }),
-      ...seedRegistrations(1, { Category: LABEL.rookie })
+      ...seedRegistrations(1, { Category: LABEL['rookie-mens'] })
     ]
   });
   const res = slotsGet(env);
   assert.equal(res.slots['novice-mens'].taken, 2);
-  assert.equal(res.slots.rookie.taken, 1);
+  assert.equal(res.slots['rookie-mens'].taken, 1);
+});
+
+test('slots reports open at the cut-off second', () => {
+  const env = makeEnv();
+  setNow(env, '2026-11-20T23:59:59.000+08:00');
+  assert.equal(slotsGet(env).open, true);
+});
+
+test('slots reports open false and closesAt after the cut-off', () => {
+  const env = makeEnv();
+  setNow(env, '2026-11-21T00:00:00+08:00');
+  const res = slotsGet(env);
+  assert.equal(res.ok, true);
+  assert.equal(res.open, false);
+  assert.equal(res.closesAt, CUTOFF_ISO);
+});
+
+test('register is open at exactly the cut-off second', () => {
+  const env = makeEnv();
+  setNow(env, '2026-11-20T23:59:59.000+08:00');
+  assert.equal(register(env).ok, true);
+});
+
+test('register returns CLOSED one millisecond after the cut-off', () => {
+  const env = makeEnv();
+  setNow(env, '2026-11-20T23:59:59.001+08:00');
+  const res = register(env);
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'CLOSED');
+  assert.equal(res.message, 'Registration closed on November 20, 2026 at 11:59 PM.');
+});
+
+test('register returns CLOSED before consent and field validation run', () => {
+  const env = makeEnv();
+  setNow(env, '2026-11-21T00:00:00+08:00');
+  const res = call(env, { action: 'register', player: { email: 'not-an-email' }, receipt: {}, consent: false });
+  assert.equal(res.error, 'CLOSED');
+  assert.equal(dataRows(env).length, 0);
+  assert.equal(env.state.mails.length, 0);
+  assert.equal(Object.keys(env.state.files).length, 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -439,10 +549,10 @@ test('register happy path stores a pending row and sends two emails', () => {
   assert.equal(file.permission, 'NONE');
 
   assert.equal(env.state.mails.length, 2);
-  const playerMail = env.state.mails.find((m) => m.to === 'juan@example.com');
-  const organizerMail = env.state.mails.find((m) => m.to === 'org@example.com');
+  const playerMail = mailTo(env, 'juan@example.com');
+  const orgMail = organizerMail(env);
   assert.ok(playerMail, 'player mail sent');
-  assert.ok(organizerMail, 'organizer mail sent');
+  assert.ok(orgMail, 'organizer mail sent');
   assert.equal(playerMail.name, 'Dink for the Roots');
   assert.equal(playerMail.attachments.length, 1);
   assert.equal(playerMail.attachments[0].name, 'Dink-for-the-Roots-poster.jpg');
@@ -450,8 +560,8 @@ test('register happy path stores a pending row and sends two emails', () => {
   assert.ok(playerMail.body.includes('Saturday, December 5, 2026'));
   assert.ok(playerMail.body.includes('Pickle Park, Roxas Extension, Digos City'));
   assert.ok(playerMail.htmlBody.includes(res.ref));
-  assert.ok(organizerMail.body.includes('https://drive.example/file1'));
-  assert.ok(organizerMail.body.includes('https://sheet.example/test'));
+  assert.ok(orgMail.body.includes('https://drive.example/file1'));
+  assert.ok(orgMail.body.includes('https://sheet.example/test'));
   assert.equal(env.state.fetches[0], 'https://posters.example/poster.jpg');
 });
 
@@ -468,8 +578,7 @@ test('register sends no attachment when POSTER_URL is empty', () => {
   const res = register(env);
   assert.equal(res.ok, true);
   assert.equal(env.state.fetches.length, 0);
-  const playerMail = env.state.mails.find((m) => m.to === 'juan@example.com');
-  assert.equal(playerMail.attachments, undefined);
+  assert.equal(mailTo(env, 'juan@example.com').attachments, undefined);
 });
 
 test('register succeeds without the poster when the poster fetch fails', () => {
@@ -478,8 +587,7 @@ test('register succeeds without the poster when the poster fetch fails', () => {
   const res = register(env);
   assert.equal(res.ok, true);
   assert.equal(cell(dataRows(env)[0], 'Player Email Sent'), 'yes');
-  const playerMail = env.state.mails.find((m) => m.to === 'juan@example.com');
-  assert.equal(playerMail.attachments, undefined);
+  assert.equal(mailTo(env, 'juan@example.com').attachments, undefined);
 });
 
 test('register succeeds without the poster when the poster returns HTTP 404', () => {
@@ -487,7 +595,7 @@ test('register succeeds without the poster when the poster returns HTTP 404', ()
   env.state.posterMode = 'missing';
   const res = register(env);
   assert.equal(res.ok, true);
-  assert.equal(env.state.mails.find((m) => m.to === 'juan@example.com').attachments, undefined);
+  assert.equal(mailTo(env, 'juan@example.com').attachments, undefined);
 });
 
 test('register accepts PNG and WebP receipts that match their signatures', () => {
@@ -505,6 +613,32 @@ test('register normalizes the phone number to +639 form', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Club name
+// ---------------------------------------------------------------------------
+
+test('club name is optional: blank is accepted and stored empty', () => {
+  const env = makeEnv();
+  const res = register(env, { clubName: '   ' });
+  assert.equal(res.ok, true);
+  assert.equal(cell(dataRows(env)[0], 'Club Name'), '');
+  assert.equal(mailTo(env, 'juan@example.com').body.includes('Club:'), false);
+});
+
+test('club name of exactly 100 characters is accepted', () => {
+  const env = makeEnv();
+  const res = register(env, { clubName: 'a'.repeat(100) });
+  assert.equal(res.ok, true);
+  assert.equal(cell(dataRows(env)[0], 'Club Name'), 'a'.repeat(100));
+});
+
+test('club name shows in the player and organizer emails when set', () => {
+  const env = makeEnv();
+  register(env, { clubName: 'Digos Dinkers' });
+  assert.ok(mailTo(env, 'juan@example.com').body.includes('Club: Digos Dinkers'));
+  assert.ok(organizerMail(env).body.includes('Club: Digos Dinkers'));
+});
+
+// ---------------------------------------------------------------------------
 // Register: validation
 // ---------------------------------------------------------------------------
 
@@ -515,12 +649,18 @@ const VALIDATION_CASES = [
   ['municipality outside list', { municipality: 'Davao City' }, {}, {}, 'municipality'],
   ['bad shirt size', { shirtSize: 'XXL' }, {}, {}, 'shirtSize'],
   ['bad category', { category: 'open' }, {}, {}, 'category'],
+  ['retired rookie category', { category: 'rookie' }, {}, {}, 'category'],
+  ['club name 101 characters', { clubName: 'a'.repeat(101) }, {}, {}, 'clubName'],
   ['oversize receipt', {}, { base64: b64([...JPEG, ...Array(5 * 1024 * 1024).fill(0)]) }, {}, 'receipt.base64'],
-  ['wrong mime type', {}, { mimeType: 'application/pdf' }, {}, 'receipt.mimeType'],
-  ['mime does not match bytes', {}, { mimeType: 'image/png' }, {}, 'receipt.mimeType'],
+  ['wrong receipt mime type', {}, { mimeType: 'application/pdf' }, {}, 'receipt.mimeType'],
+  ['receipt mime does not match bytes', {}, { mimeType: 'image/png' }, {}, 'receipt.mimeType'],
   ['no consent', {}, {}, { consent: false }, 'consent'],
-  ['invalid base64', {}, { base64: 'not base64!' }, {}, 'receipt.base64'],
-  ['partner same as player', { partnerName: 'juan dela cruz' }, {}, {}, 'partnerName']
+  ['invalid receipt base64', {}, { base64: 'not base64!' }, {}, 'receipt.base64'],
+  ['partner same as player', { partnerName: 'juan dela cruz' }, {}, {}, 'partnerName'],
+  ['valid ID missing', {}, {}, { validId: undefined }, 'validId.base64'],
+  ['valid ID wrong mime type', {}, {}, { validId: validId({ mimeType: 'application/pdf' }) }, 'validId.mimeType'],
+  ['valid ID mime does not match bytes', {}, {}, { validId: validId({ mimeType: 'image/webp' }) }, 'validId.mimeType'],
+  ['valid ID invalid base64', {}, {}, { validId: validId({ base64: 'bad!' }) }, 'validId.base64']
 ];
 
 for (const [name, player, receipt, extra, field] of VALIDATION_CASES) {
@@ -532,9 +672,21 @@ for (const [name, player, receipt, extra, field] of VALIDATION_CASES) {
     assert.equal(res.field, field);
     assert.equal(dataRows(env).length, 0, 'no row written');
     assert.equal(env.state.mails.length, 0, 'no email sent');
-    assert.equal(Object.keys(env.state.files).length, 0, 'no receipt saved');
+    assert.equal(Object.keys(env.state.files).length, 0, 'no file saved');
   });
 }
+
+test('valid ID error messages name the valid ID, not the receipt', () => {
+  const env = makeEnv();
+  const res = register(env, {}, {}, { validId: validId({ mimeType: 'application/pdf' }) });
+  assert.equal(res.message, 'Valid ID must be a JPEG, PNG, or WebP image.');
+});
+
+test('receipt error messages are unchanged', () => {
+  const env = makeEnv();
+  const res = register(env, {}, { mimeType: 'application/pdf' });
+  assert.equal(res.message, 'Receipt must be a JPEG, PNG, or WebP image.');
+});
 
 test('register rejects a request body that is not JSON', () => {
   const env = makeEnv();
@@ -567,6 +719,47 @@ test('register returns SERVER when the receipt folder is missing', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Valid ID
+// ---------------------------------------------------------------------------
+
+test('valid ID is saved private in the ID folder with its columns filled', () => {
+  const env = makeEnv();
+  const res = register(env);
+  const row = dataRows(env)[0];
+
+  const idFile = env.state.files.file2;
+  assert.equal(idFile.folderName, 'Dink for the Roots Valid IDs');
+  assert.equal(idFile.blob.name, res.ref + '-ID-id.jpg');
+  assert.equal(idFile.access, 'PRIVATE');
+  assert.equal(idFile.permission, 'NONE');
+  assert.equal(env.state.props.VALID_ID_FOLDER_ID, env.state.folders[1].id);
+  assert.equal(cell(row, 'Valid ID File ID'), 'file2');
+  assert.equal(cell(row, 'Valid ID URL'), 'https://drive.example/file2');
+  assert.equal(cell(row, 'Receipt File ID'), 'file1');
+});
+
+test('organizer email has a Valid ID link row', () => {
+  const env = makeEnv();
+  register(env);
+  assert.ok(organizerMail(env).body.includes('Valid ID: https://drive.example/file2'));
+});
+
+test('organizer email goes to both default addresses and the property address once', () => {
+  const env = makeEnv({ props: { ORGANIZER_EMAIL: 'org@example.com, IBANEZDIANAROSE9@gmail.com, ' } });
+  register(env);
+  const to = organizerMail(env).to.split(',').map((s) => s.trim());
+  assert.deepEqual([...to].sort(), [...DEFAULT_ORGANIZERS, 'org@example.com'].sort());
+  assert.equal(new Set(to).size, to.length, 'no duplicates');
+});
+
+test('organizer email still reaches both defaults when ORGANIZER_EMAIL is empty', () => {
+  const env = makeEnv({ props: { ORGANIZER_EMAIL: '' } });
+  register(env);
+  const to = organizerMail(env).to.split(',').map((s) => s.trim());
+  assert.deepEqual(to, DEFAULT_ORGANIZERS);
+});
+
+// ---------------------------------------------------------------------------
 // Register: duplicates, cap, locking
 // ---------------------------------------------------------------------------
 
@@ -586,7 +779,7 @@ test('same email in the same category returns the existing ref', () => {
 test('same email in a different category is a new registration', () => {
   const env = makeEnv();
   const first = register(env);
-  const second = register(env, { category: 'rookie' });
+  const second = register(env, { category: 'rookie-mens' });
   assert.equal(second.ok, true);
   assert.equal(second.duplicate, undefined);
   assert.notEqual(second.ref, first.ref);
@@ -603,15 +796,15 @@ test('a Rejected registration does not block the same email from registering aga
   assert.notEqual(res.ref, 'DFR-OLDAAA');
 });
 
-test('register returns FULL when 36 rows of the category are taken', () => {
-  const env = makeEnv({ rows: [EXPECTED_HEADERS, ...seedRegistrations(36, {})] });
+test('register returns FULL when 40 rows of the category are taken', () => {
+  const env = makeEnv({ rows: [EXPECTED_HEADERS, ...seedRegistrations(40, {})] });
   const res = register(env);
   assert.equal(res.ok, false);
   assert.equal(res.error, 'FULL');
-  assert.equal(dataRows(env).length, 36);
+  assert.equal(dataRows(env).length, 40);
   assert.equal(env.state.mails.length, 0);
 
-  const other = register(env, { category: 'rookie' });
+  const other = register(env, { category: 'rookie-mens' });
   assert.equal(other.ok, true, 'other categories stay open');
 });
 
@@ -619,13 +812,13 @@ test('Rejected rows are not counted toward the cap', () => {
   const env = makeEnv({
     rows: [
       EXPECTED_HEADERS,
-      ...seedRegistrations(35, {}),
+      ...seedRegistrations(39, {}),
       ...seedRegistrations(3, { Status: 'Rejected' })
     ]
   });
-  assert.equal(register(env).ok, true, 'the 36th player fits');
+  assert.equal(register(env).ok, true, 'the 40th player fits');
   const next = register(env, { email: 'late@example.com' });
-  assert.equal(next.error, 'FULL', 'the 37th player does not fit');
+  assert.equal(next.error, 'FULL', 'the 41st player does not fit');
 });
 
 test('register returns BUSY when the lock cannot be taken', () => {
@@ -661,7 +854,8 @@ test('user text that starts with a formula character is prefixed with an apostro
     fullName: '=HYPERLINK("https://evil.example","x")',
     barangay: '+Zone 9',
     partnerName: '@Partner Name',
-    paymentRef: '-GC-99999'
+    paymentRef: '-GC-99999',
+    clubName: '=Club'
   });
   assert.equal(res.ok, true);
   const row = dataRows(env)[0];
@@ -669,17 +863,163 @@ test('user text that starts with a formula character is prefixed with an apostro
   assert.equal(cell(row, 'Barangay'), "'+Zone 9");
   assert.equal(cell(row, 'Partner Name'), "'@Partner Name");
   assert.equal(cell(row, 'Payment Ref (player)'), "'-GC-99999");
+  assert.equal(cell(row, 'Club Name'), "'=Club");
 });
 
 test('user text is escaped in the HTML emails', () => {
   const env = makeEnv();
   register(env, { fullName: '<script>alert(1)</script>', partnerName: 'Ann & "Bo"' });
-  const playerMail = env.state.mails.find((m) => m.to === 'juan@example.com');
+  const playerMail = mailTo(env, 'juan@example.com');
   assert.equal(playerMail.htmlBody.includes('<script>'), false);
   assert.ok(playerMail.htmlBody.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
   assert.ok(playerMail.htmlBody.includes('Ann &amp; &quot;Bo&quot;'));
-  const organizerMail = env.state.mails.find((m) => m.to === 'org@example.com');
-  assert.equal(organizerMail.htmlBody.includes('<script>'), false);
+  assert.equal(organizerMail(env).htmlBody.includes('<script>'), false);
+});
+
+// ---------------------------------------------------------------------------
+// Category tabs
+// ---------------------------------------------------------------------------
+
+test('buildPairs_ pairs mutual partners as Complete with no note', () => {
+  const env = makeEnv();
+  const rows = [
+    pRow({ Ref: 'DFR-AAAAA1', 'Full Name': 'Juan Dela Cruz', 'Partner Name': 'Pedro Santos', Email: 'juan@x.com', Phone: "'+639171234567" }),
+    pRow({ Ref: 'DFR-BBBBB2', 'Full Name': 'Pedro Santos', 'Partner Name': 'Juan Dela Cruz', Email: 'pedro@x.com' })
+  ];
+  const pairs = plain(env.ctx.buildPairs_(rows, 'novice-mens'));
+  assert.equal(pairs.length, 2);
+  assert.deepEqual(pairs[0], PAIR_HEADERS);
+  assert.equal(pairs[1][0], 1);
+  assert.equal(pairs[1][1], 'Complete');
+  assert.equal(pairs[1][2], 'Juan Dela Cruz');
+  assert.equal(pairs[1][3], 'DFR-AAAAA1');
+  assert.equal(pairs[1][6], "'+639171234567");
+  assert.equal(pairs[1][9], 'Pedro Santos');
+  assert.equal(pairs[1][10], 'DFR-BBBBB2');
+  assert.equal(pairs[1][16], '');
+});
+
+test('buildPairs_ marks a one-way match Complete with the exact-match note', () => {
+  const env = makeEnv();
+  const rows = [
+    pRow({ Ref: 'DFR-AAAAA1', 'Full Name': 'Juan Dela Cruz', 'Partner Name': 'Pedro Santos' }),
+    pRow({ Ref: 'DFR-BBBBB2', 'Full Name': 'Pedro Santos', 'Partner Name': 'Ana Cruz' })
+  ];
+  const pairs = plain(env.ctx.buildPairs_(rows, 'novice-mens'));
+  assert.equal(pairs.length, 2);
+  assert.equal(pairs[1][1], 'Complete');
+  assert.equal(pairs[1][16], 'Partner names do not match exactly. Check.');
+});
+
+test('buildPairs_ keeps an exact pair together when an earlier player names one of them', () => {
+  const env = makeEnv();
+  const rows = [
+    pRow({ Ref: 'DFR-AAAAA1', 'Full Name': 'Ana Cruz', 'Partner Name': 'Pedro Santos' }),
+    pRow({ Ref: 'DFR-BBBBB2', 'Full Name': 'Pedro Santos', 'Partner Name': 'Juan Dela Cruz' }),
+    pRow({ Ref: 'DFR-CCCCC3', 'Full Name': 'Juan Dela Cruz', 'Partner Name': 'Pedro Santos' })
+  ];
+  const pairs = plain(env.ctx.buildPairs_(rows, 'novice-mens'));
+  assert.equal(pairs.length, 3);
+  assert.equal(pairs[1][2], 'Ana Cruz');
+  assert.equal(pairs[1][1], 'Waiting for partner');
+  assert.equal(pairs[2][2], 'Pedro Santos');
+  assert.equal(pairs[2][9], 'Juan Dela Cruz');
+  assert.equal(pairs[2][16], '');
+});
+
+test('buildPairs_ shows a waiting row with its named partner', () => {
+  const env = makeEnv();
+  const rows = [pRow({ Ref: 'DFR-AAAAA1', 'Full Name': 'Juan Dela Cruz', 'Partner Name': 'Pedro Santos' })];
+  const pairs = plain(env.ctx.buildPairs_(rows, 'novice-mens'));
+  assert.equal(pairs.length, 2);
+  assert.equal(pairs[1][1], 'Waiting for partner');
+  assert.equal(pairs[1][2], 'Juan Dela Cruz');
+  assert.equal(pairs[1][9], '');
+  assert.equal(pairs[1][16], 'Named partner: Pedro Santos');
+});
+
+test('buildPairs_ leaves a player waiting when the only partner was Rejected', () => {
+  const env = makeEnv();
+  const rows = [
+    pRow({ Ref: 'DFR-AAAAA1', 'Full Name': 'Juan Dela Cruz', 'Partner Name': 'Pedro Santos' }),
+    pRow({ Ref: 'DFR-BBBBB2', 'Full Name': 'Pedro Santos', 'Partner Name': 'Juan Dela Cruz', Status: 'Rejected' })
+  ];
+  const pairs = plain(env.ctx.buildPairs_(rows, 'novice-mens'));
+  assert.equal(pairs.length, 2, 'the rejected row is excluded');
+  assert.equal(pairs[1][1], 'Waiting for partner');
+});
+
+test('buildPairs_ ignores case, punctuation, and extra spaces in names', () => {
+  const env = makeEnv();
+  const rows = [
+    pRow({ Ref: 'DFR-AAAAA1', 'Full Name': 'JUAN dela-Cruz.', 'Partner Name': 'pedro   santos!' }),
+    pRow({ Ref: 'DFR-BBBBB2', 'Full Name': 'Pedro Santos', 'Partner Name': 'juan dela cruz' })
+  ];
+  const pairs = plain(env.ctx.buildPairs_(rows, 'novice-mens'));
+  assert.equal(pairs.length, 2);
+  assert.equal(pairs[1][1], 'Complete');
+  assert.equal(pairs[1][16], '');
+});
+
+test('buildPairs_ keeps categories separate', () => {
+  const env = makeEnv();
+  const rows = [
+    pRow({ Ref: 'DFR-AAAAA1', 'Full Name': 'Juan Dela Cruz', 'Partner Name': 'Pedro Santos' }),
+    pRow({ Ref: 'DFR-BBBBB2', 'Full Name': 'Pedro Santos', 'Partner Name': 'Juan Dela Cruz', Category: LABEL['rookie-mens'] })
+  ];
+  const novice = plain(env.ctx.buildPairs_(rows, 'novice-mens'));
+  assert.equal(novice.length, 2);
+  assert.equal(novice[1][1], 'Waiting for partner');
+
+  const rookie = plain(env.ctx.buildPairs_(rows, 'rookie-mens'));
+  assert.equal(rookie.length, 2);
+  assert.equal(rookie[1][1], 'Waiting for partner');
+});
+
+test('register rebuilds the matching category tab with the pair', () => {
+  const env = makeEnv();
+  const first = register(env);
+  const second = register(env, {
+    fullName: 'Pedro Santos',
+    partnerName: 'Juan Dela Cruz',
+    email: 'pedro@example.com'
+  });
+  assert.equal(second.ok, true);
+
+  const tab = env.state.sheets["Novice Men's"];
+  assert.ok(tab, 'tab exists');
+  assert.equal(tab.frozen, 1);
+  assert.deepEqual(plain(tab.rows[0]), PAIR_HEADERS);
+  assert.equal(tab.rows.length, 2);
+  assert.equal(tab.rows[1][1], 'Complete');
+  assert.equal(tab.rows[1][3], first.ref);
+  assert.equal(tab.rows[1][10], second.ref);
+});
+
+test('register rebuilds only its own category tab', () => {
+  const env = makeEnv();
+  register(env);
+  assert.ok(env.state.sheets["Novice Men's"], 'own tab written');
+  assert.equal(env.state.sheets["Rookie Mixed"], undefined, 'other tab untouched');
+});
+
+test('verify updates the player status in the category tab', () => {
+  const env = makeEnv();
+  const first = register(env);
+  const res = call(env, { action: 'verify', key: ADMIN_KEY, ref: first.ref, result: { verdict: 'Verified' } });
+  assert.equal(res.ok, true);
+  const tab = env.state.sheets["Novice Men's"];
+  assert.equal(tab.rows[1][4], 'Verified');
+});
+
+test('rebuildTabs writes the rookie tab from Registrations', () => {
+  const env = makeEnv();
+  register(env, { category: 'rookie-womens', fullName: 'Ana Reyes', partnerName: 'Maria Lopez', email: 'ana@example.com' });
+  env.ctx.rebuildTabs();
+  const tab = env.state.sheets["Rookie Women's"];
+  assert.equal(tab.rows.length, 2);
+  assert.equal(tab.rows[1][2], 'Ana Reyes');
+  assert.equal(tab.rows[1][1], 'Waiting for partner');
 });
 
 // ---------------------------------------------------------------------------

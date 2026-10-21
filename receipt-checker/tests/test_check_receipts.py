@@ -102,7 +102,7 @@ class EnvTests(unittest.TestCase):
 
     def test_check_does_not_need_endpoint(self):
         cfg = cr.load_config(os.path.join(HERE, "does-not-exist.env"), require_endpoint=False)
-        self.assertEqual(cfg.expected_amount, 1000.0)
+        self.assertEqual(cfg.expected_amount, 1200.0)
 
     def test_rejects_http_endpoint(self):
         path = write_env(["ENDPOINT=http://example.test/exec", "ADMIN_KEY=k"])
