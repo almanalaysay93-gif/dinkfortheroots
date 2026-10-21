@@ -560,7 +560,7 @@ function requireFeeOnReceipt_(receipt) {
   }
   if (!showsFee_(text)) {
     throw invalid_('This receipt does not show ' + FEE_TEXT + '. Pay ' + FEE_TEXT
-      + ' and upload the full, unedited screenshot of that payment.', 'receipt.amount');
+      + ' for this player only and upload a clear, uncropped screenshot where the amount is easy to read.', 'receipt.amount');
   }
 }
 
