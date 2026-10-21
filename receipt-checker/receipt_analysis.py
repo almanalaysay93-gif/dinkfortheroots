@@ -217,7 +217,7 @@ def parse_amount(lines):
 
 
 def _normalize_ref(text):
-    return re.sub(r"[\s-]", "", text).upper()
+    return re.sub(r"[\s-]", "", str(text)).upper()
 
 
 def parse_reference(lines):

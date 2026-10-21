@@ -115,6 +115,10 @@ class ParserTests(unittest.TestCase):
                 value, _ = ra.parse_reference(lines)
                 self.assertEqual(value, expected)
 
+    def test_numeric_payment_ref_from_sheet(self):
+        # Google Sheets returns a digits-only ref as a number
+        self.assertTrue(ra._refs_match(1234567890123, "1234 567 890123"))
+
     def test_reference_missing(self):
         self.assertEqual(ra.parse_reference(["Amount \u20b11,000.00"]), (None, None))
 

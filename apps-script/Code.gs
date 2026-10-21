@@ -400,6 +400,13 @@ function safeCell_(value) {
   return /^[=+\-@\t\r]/.test(text) ? "'" + text : text;
 }
 
+// Reference numbers must stay text: Sheets turns digit strings into numbers
+// and drops digits after the 15th.
+function textCell_(value) {
+  var text = value === undefined || value === null ? '' : String(value);
+  return text ? "'" + text : '';
+}
+
 function sanitizeFileName_(name) {
   return String(name).replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80);
 }
@@ -532,7 +539,7 @@ function buildRecord_(ref, player, file) {
     'Category': CATEGORIES[player.category],
     'Partner Name': safeCell_(player.partnerName),
     'Shirt Size': player.shirtSize,
-    'Payment Ref (player)': safeCell_(player.paymentRef),
+    'Payment Ref (player)': textCell_(player.paymentRef),
     'Receipt File ID': file.getId(),
     'Receipt URL': file.getUrl()
   };
@@ -721,7 +728,7 @@ function pendingItem_(row) {
     fullName: row['Full Name'],
     email: row.Email,
     category: row.Category,
-    paymentRef: row['Payment Ref (player)'],
+    paymentRef: String(row['Payment Ref (player)'] ?? '').replace(/^'/, ''),
     submittedAt: String(row['Submitted At']),
     fileName: blob.getName(),
     mimeType: blob.getContentType(),
@@ -750,7 +757,7 @@ function verifyRegistration_(ref, result) {
     'Status': result.verdict,
     'Verdict': result.verdict,
     'OCR Amount': safeCell_(result.amount),
-    'OCR Reference No': safeCell_(result.referenceNo),
+    'OCR Reference No': textCell_(result.referenceNo),
     'OCR Txn Date': safeCell_(result.txnDate),
     'OCR Sender': safeCell_(result.sender),
     'OCR Recipient': safeCell_(result.recipient),
@@ -781,8 +788,8 @@ function listRefs_() {
   }).map(function (row) {
     return {
       ref: row.Ref,
-      referenceNo: row['OCR Reference No'] ?? '',
-      imageHash: row['Image Hash'] ?? ''
+      referenceNo: String(row['OCR Reference No'] ?? '').replace(/^'/, ''),
+      imageHash: String(row['Image Hash'] ?? '')
     };
   });
   return { ok: true, refs: refs };

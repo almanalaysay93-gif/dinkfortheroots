@@ -777,7 +777,7 @@ test('verify writes the result columns and sets the status', () => {
   assert.equal(cell(row, 'Status'), 'Needs review');
   assert.equal(cell(row, 'Verdict'), 'Needs review');
   assert.equal(cell(row, 'OCR Amount'), '1000.00');
-  assert.equal(cell(row, 'OCR Reference No'), 'REF123');
+  assert.equal(cell(row, 'OCR Reference No'), "'REF123");
   assert.equal(cell(row, 'OCR Txn Date'), '2026-10-20');
   assert.equal(cell(row, 'OCR Sender'), 'Juan D.');
   assert.equal(cell(row, 'OCR Recipient'), 'Dink Team');
