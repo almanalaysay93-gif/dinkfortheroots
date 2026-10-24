@@ -829,6 +829,25 @@ test('register returns FULL when 40 rows of the category are taken', () => {
   assert.equal(other.ok, true, 'other categories stay open');
 });
 
+for (const category of ['novice-mens', 'novice-womens', 'novice-mixed', 'rookie-mixed']) {
+  test(category + ': accepts player 40 and refuses player 41 without saving files or sending mail', () => {
+    const env = makeEnv({
+      rows: [EXPECTED_HEADERS, ...seedRegistrations(39, { Category: LABEL[category] })]
+    });
+    const last = register(env, { category });
+    assert.equal(last.ok, true);
+    assert.equal(dataRows(env).length, 40);
+    assert.equal(slotsGet(env).slots[category].taken, 40);
+    const files = env.state.fileSeq;
+    const mails = env.state.mails.length;
+    const overflow = register(env, { category, email: 'overflow@example.com' });
+    assert.equal(overflow.error, 'FULL');
+    assert.equal(dataRows(env).length, 40);
+    assert.equal(env.state.fileSeq, files);
+    assert.equal(env.state.mails.length, mails);
+  });
+}
+
 test('Rejected rows are not counted toward the cap', () => {
   const env = makeEnv({
     rows: [

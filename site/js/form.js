@@ -1,6 +1,6 @@
 // Registration form: slots, shirt size guide, payment QR, uploads, validation, submit.
 import { CONFIG } from "./config.js";
-import { CATEGORIES, CAP, getSlots, isDemo, isPastCutoff, register } from "./api.js";
+import { CATEGORIES, CAP, getSlots, isDemo, register } from "./api.js";
 
 const SIZES = [
   ["K8", 13, 17.5], ["K10", 13.5, 18.5], ["K12", 14.5, 19.5], ["K14", 15, 20], ["K16", 16, 21.5],
@@ -35,23 +35,67 @@ const peso = (n) => "₱" + n.toLocaleString("en-PH");
 
 let slotState = null;
 let closed = false;
+let busy = false;
+let slotRequest = null;
 const uploads = { receipt: null, validId: null };
 let lastPayload = null;
 
 /* ---------- Slots ---------- */
 export async function loadSlots() {
+  if (slotRequest) return slotRequest;
+  slotRequest = refreshSlots();
+  try { return await slotRequest; }
+  finally { slotRequest = null; }
+}
+
+async function refreshSlots() {
   const note = $("#slotsNote");
   try {
     const res = await getSlots();
     if (!res || !res.ok) throw new Error(res && res.message || "slots");
+    if (!CATEGORIES.every(({ key }) => {
+      const s = res.slots && res.slots[key];
+      return s && Number.isInteger(s.taken) && s.taken >= 0 && Number.isInteger(s.cap) && s.cap > 0;
+    })) throw new Error("Incomplete slot counts");
     slotState = res.slots;
-    const open = res.open !== false && !isPastCutoff();
-    renderSlots(res.slots, open);
-    if (!open) applyClosed();
+    // Use the live server's deadline decision, not the device clock.
+    const open = res.open !== false;
+    const allFull = CATEGORIES.every(({ key }) => slotState[key].taken >= slotState[key].cap);
+    if (!open || allFull) {
+      applyClosed(!open ? "Registration is closed. The cut-off was November 20, 2026, 11:59 PM." : "Registration is closed. All categories have reached 40 players (20 pairs) each.");
+    } else {
+      closed = false;
+      $("#closedNote").hidden = true;
+      $("#regForm").querySelectorAll("input, select, textarea, button").forEach((el) => { el.disabled = false; });
+    }
+    renderSlots(slotState, open);
+    updatePayment();
+    setBusy(busy);
+    note.hidden = true;
     if (isDemo()) { note.textContent = "Preview mode. Slot counts are sample numbers."; note.hidden = false; }
+    return true;
   } catch {
+    slotState = null;
+    updatePayment();
+    setBusy(busy);
+    note.textContent = "Cannot check availability right now. Payment and submission are paused until slots can be checked.";
+    note.hidden = false;
     document.querySelectorAll("[data-slots]").forEach((el) => { el.textContent = "Slot count unavailable right now."; });
+    return false;
   }
+}
+
+function updatePayment() {
+  const key = $("input[name=category]:checked")?.value;
+  const s = slotState && slotState[key];
+  const available = !closed && s && s.taken < s.cap;
+  $("#payQr").hidden = !available;
+  $("#pay-hint").hidden = !available;
+  const note = $("#paymentAvailability");
+  note.hidden = !!available;
+  note.textContent = closed ? "Registration is closed. Do not send payment."
+    : !slotState ? "Checking availability. Do not send payment until an open category is confirmed."
+      : "Choose an available category to see the payment QR. Do not pay for a full category.";
 }
 
 function renderSlots(slots, open) {
@@ -81,12 +125,12 @@ function renderSlots(slots, open) {
   }
 }
 
-// Registration is closed: the server said so, or the browser clock is past the cut-off.
-function applyClosed() {
+function applyClosed(message) {
   closed = true;
-  $("#formStatus").innerHTML = "";
   $("#regForm").querySelectorAll("input, select, textarea, button").forEach((el) => { el.disabled = true; });
+  $("#closedNote p").textContent = message;
   $("#closedNote").hidden = false;
+  updatePayment();
 }
 
 /* ---------- Shirt sizes ---------- */
@@ -274,8 +318,9 @@ function showStatus(kind, html) {
   box.scrollIntoView({ behavior: document.documentElement.classList.contains("reduced-motion") ? "auto" : "smooth", block: "center" });
 }
 function setBusy(on) {
+  busy = on;
   const btn = $("#submitBtn");
-  btn.disabled = on || closed;
+  btn.disabled = on || closed || !slotState;
   btn.classList.toggle("is-busy", on);
   btn.setAttribute("aria-busy", String(on));
   btn.querySelector(".btn__label").textContent = on ? "Submitting…" : "Submit registration";
@@ -286,6 +331,17 @@ async function send(form, payload) {
   setBusy(true);
   $("#formStatus").innerHTML = "";
   try {
+    if (!await loadSlots()) {
+      showStatus("err", "<h3>Availability could not be checked</h3><p>Please wait for slot counts to refresh before submitting. Do not send payment yet.</p>");
+      return;
+    }
+    if (closed) return;
+    const s = slotState[payload.player.category];
+    if (!s || s.taken >= s.cap) {
+      showStatus("err", "<h3>This category is full</h3><p>Choose another available category. Do not send payment for this category.</p>");
+      lastPayload = null;
+      return;
+    }
     const res = await register(payload);
     if (res && res.ok && res.duplicate) {
       showStatus("warn", `<h3>You are already registered</h3><p>This email already has an entry in this category.</p><p>Your reference: <span class="ref">${esc(res.ref)}</span></p>`);
@@ -298,12 +354,19 @@ async function send(form, payload) {
       $("#sizeHl").classList.remove("is-on");
       $("#sizeRead").textContent = "Choose a size to see its measurements.";
       lastPayload = null;
-      loadSlots();
+      updatePayment();
+      await loadSlots();
     } else if (res && res.error === "CLOSED") {
-      applyClosed();
+      applyClosed("Registration is closed. The cut-off was November 20, 2026, 11:59 PM.");
+      lastPayload = null;
     } else if (res && res.error === "FULL") {
+      const radio = document.querySelector(`input[name=category][value="${payload.player.category}"]`);
+      radio.checked = false;
+      radio.disabled = true;
+      updatePayment();
       showStatus("err", `<h3>This category is full</h3><p>The last slot was taken before your entry arrived. Choose another category if one is open.</p>`);
-      loadSlots();
+      lastPayload = null;
+      await loadSlots();
     } else if (res && res.error === "INVALID" && res.field === "receipt.amount") {
       // Retrying the same file cannot pass, so no retry button: the player must choose another receipt.
       setError("receipt", res.message);
@@ -326,11 +389,19 @@ export function initForm() {
   buildQr();
   buildUploads();
   if (isDemo()) $("#demoNote").hidden = false;
-  if (isPastCutoff()) applyClosed();
+  updatePayment();
+  setBusy(false);
+  setInterval(() => { if (document.visibilityState === "visible") loadSlots(); }, 30000);
+  addEventListener("focus", () => loadSlots());
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") loadSlots(); });
 
   // Clear an error as soon as the field changes. Uploads clear their own error on a new file.
   form.addEventListener("input", (e) => { const n = e.target.name; if (n && !UPLOADS[n]) clearError(n); });
-  form.addEventListener("change", (e) => { const n = e.target.name; if (n && !UPLOADS[n]) clearError(n); });
+  form.addEventListener("change", (e) => {
+    const n = e.target.name;
+    if (n && !UPLOADS[n]) clearError(n);
+    if (n === "category") { lastPayload = null; updatePayment(); loadSlots(); }
+  });
 
   $("#formStatus").addEventListener("click", (e) => {
     if (e.target.closest("[data-retry]") && lastPayload) send(form, lastPayload);

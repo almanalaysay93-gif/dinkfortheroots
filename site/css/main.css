@@ -285,6 +285,7 @@ input:focus-visible, select:focus-visible { outline: none; border-color: var(--c
 .qr-soon strong { font: 800 1rem/1.2 var(--font-display); }
 .pay__label { margin-top: 12px; font-weight: 700; color: var(--gold-100); word-break: break-word; }
 .pay__fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pay__qr[hidden] + .pay__fields { grid-column: 1 / -1; }
 
 .drop { position: relative; display: block; cursor: pointer; border: 2px dashed #a99b82; border-radius: var(--radius-m); background: #fff; padding: 18px; min-height: 96px; transition: border-color .15s, background-color .15s; }
 .drop:hover, .drop.is-over { border-color: var(--forest-700); background: #f3f6ef; }

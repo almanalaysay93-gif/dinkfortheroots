@@ -283,11 +283,12 @@
             </div>
           </fieldset>
 
-          <fieldset class="form__group" aria-describedby="pay-hint">
+          <fieldset class="form__group" aria-describedby="paymentAvailability pay-hint">
             <legend class="form__legend"><span class="step">4</span> Payment</legend>
-            <p class="hint" id="pay-hint">Pay ₱1,200 for this player only, using the QR code, then upload a screenshot of your receipt. One payment per player: a single ₱2,400 payment for two players is not accepted.</p>
+            <p class="hint" id="paymentAvailability" role="status">Checking availability. Do not send payment until an open category is confirmed.</p>
+            <p class="hint" id="pay-hint" hidden>Pay ₱1,200 for this player only, using the QR code, then upload a screenshot of your receipt. One payment per player: a single ₱2,400 payment for two players is not accepted.</p>
             <div class="pay">
-              <div class="pay__qr" id="payQr">
+              <div class="pay__qr" id="payQr" hidden>
                 <p class="pay__fee"><span>Amount</span><strong>₱1,200</strong></p>
                 <div class="qr-frame" id="qrFrame"></div>
                 <p class="pay__label" id="payLabel" hidden></p>

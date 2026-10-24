@@ -53,7 +53,7 @@ export async function getSlots() {
     }
     return { ok: true, open: !isPastCutoff(), closesAt: CUTOFF_ISO, slots };
   }
-  const res = await fetch(CONFIG.ENDPOINT + (CONFIG.ENDPOINT.includes("?") ? "&" : "?") + "action=slots");
+  const res = await fetch(CONFIG.ENDPOINT + (CONFIG.ENDPOINT.includes("?") ? "&" : "?") + "action=slots&_=" + Date.now(), { cache: "no-store" });
   if (!res.ok) throw new Error("HTTP " + res.status);
   return res.json();
 }
