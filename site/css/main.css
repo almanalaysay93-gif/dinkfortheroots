@@ -398,3 +398,27 @@ html.js .reveal.is-in { opacity: 1; transform: none; transition: opacity .8s var
   .court-bg__img { object-position: 50% 72%; }
 }
 html.reduced-motion .court-bg__img { transform: none; will-change: auto; }
+
+/* Registration terms: readable on phones, with the original poster available. */
+.terms-review { appearance: none; border: 0; background: none; color: var(--maroon-700); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font: inherit; font-weight: 700; padding: 10px 0; min-height: 44px; }
+.terms { width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 0; border: 1px solid #cfc3ab; border-radius: 18px; color: #1d1d1d; background: var(--paper); box-shadow: 0 24px 90px #0006; }
+.terms[open] { display: flex; flex-direction: column; }
+.terms::backdrop { background: rgba(10, 24, 16, .78); }
+.terms__header, .terms__footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; flex: none; }
+.terms__header { border-bottom: 1px solid #cfc3ab; }
+.terms__header .eyebrow { margin-bottom: 4px; }
+.terms__header h2 { font: 900 clamp(1.35rem, 4vw, 1.8rem)/1.2 var(--font-display); }
+.terms__close { flex: none; border: 0; border-radius: 50%; background: var(--paper-2); color: #1d1d1d; cursor: pointer; width: 44px; height: 44px; font-size: 28px; }
+.terms__body { overflow-y: auto; overscroll-behavior: contain; padding: 20px 24px; min-height: 0; line-height: 1.65; }
+.terms__body h3 { margin: 22px 0 10px; font-weight: 800; font-size: 1.1rem; }
+.terms__body ul { list-style: disc; padding-left: 24px; margin-bottom: 20px; }
+.terms__body li + li { margin-top: 8px; }
+.terms__footer { border-top: 1px solid #cfc3ab; background: var(--paper-2); }
+.terms__poster { margin-top: 20px; }
+.terms__poster summary { cursor: pointer; padding: 8px 0; font-weight: 700; }
+.terms__poster img { width: 100%; height: auto; margin-top: 12px; }
+@media (max-width: 480px) {
+  .terms__header, .terms__footer, .terms__body { padding: 16px; }
+  .terms__footer { flex-wrap: wrap; }
+  .terms__footer .btn { flex: 1; }
+}

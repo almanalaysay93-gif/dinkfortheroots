@@ -337,6 +337,13 @@
 
           <div class="form__group form__group--last">
             <div class="check">
+              <input id="termsAgreement" name="termsAgreement" type="checkbox" required aria-describedby="termsAgreement-err">
+              <label for="termsAgreement">I have read and agree to the tournament terms and conditions.</label>
+            </div>
+            <button class="terms-review" type="button" id="reviewTerms">Read terms and conditions</button>
+            <p class="err" id="termsAgreement-err"></p>
+
+            <div class="check">
               <input id="consent" name="consent" type="checkbox" required aria-describedby="consent-err">
               <label for="consent">I agree that the organizers use my details only for this tournament: registration, payment checking, and event updates.</label>
             </div>
@@ -352,6 +359,49 @@
       </div>
     </section>
   </main>
+
+  <dialog class="terms" id="termsDialog" aria-labelledby="termsTitle" aria-describedby="termsIntro">
+    <header class="terms__header">
+      <div><p class="eyebrow">Dink for the Roots</p><h2 id="termsTitle" tabindex="-1" autofocus>Terms &amp; conditions</h2></div>
+      <button class="terms__close" type="button" data-close-terms aria-label="Close terms and conditions">×</button>
+    </header>
+    <div class="terms__body" tabindex="0" aria-label="Tournament terms">
+      <p id="termsIntro">By registering for the tournament, all participants agree to the following terms and conditions:</p>
+      <h3>1. Registration and Fees</h3>
+      <ul>
+        <li>Registration is confirmed only upon completion of the registration requirements and payment of the registration fee.</li>
+        <li>The registration fee is ₱1,200 per player, subject to confirmation by the organizers.</li>
+        <li>Each pair must register under one of the designated categories: Novice Men's Doubles, Novice Women's Doubles, Novice Mixed Doubles, or Rookie Mixed Doubles.</li>
+        <li>Each category is limited to 20 pairs. Slots are confirmed on a first-paid, first-served basis.</li>
+        <li>Registration fees are non-refundable, except when otherwise approved by the organizers or required by applicable law.</li>
+      </ul>
+      <h3>2. Player Eligibility</h3>
+      <ul>
+        <li>Participants must register in the appropriate division according to their playing experience and the eligibility criteria set by the organizers.</li>
+        <li>All player information submitted must be accurate and complete.</li>
+        <li>Players may not register under false information or use another person's identity.</li>
+        <li>The organizers reserve the right to verify eligibility and reassign or disqualify players who do not meet the division requirements.</li>
+      </ul>
+      <h3>3. Partner and Category Rules</h3>
+      <ul>
+        <li>Each team must consist of two registered players.</li>
+        <li>Mixed Doubles teams must consist of one male and one female player, according to the tournament's eligibility policy.</li>
+        <li>Any change of partner must be approved by the organizers before the team's first match.</li>
+        <li>Duplicate registrations or unauthorized substitutions are not allowed.</li>
+      </ul>
+      <h3>9. Fundraising Purpose</h3>
+      <ul>
+        <li>Participants acknowledge that DINK FOR THE ROOTS is a fundraising tournament intended to support Indigenous communities.</li>
+        <li>The organizers will communicate relevant fundraising information and updates through official event channels.</li>
+      </ul>
+      <p>By submitting the registration form and completing payment, participants confirm that they have read, understood, and agreed to these terms and conditions. The tournament committee will handle event-related concerns in accordance with the published rules and applicable laws.</p>
+      <details class="terms__poster"><summary>View the original terms poster</summary><a href="assets/terms-and-conditions.jpg" target="_blank" rel="noopener" aria-label="Open original terms poster in a new tab"><img src="assets/terms-and-conditions.jpg" width="1024" height="1280" alt="Original Dink for the Roots terms and conditions poster. The full text is provided above." loading="lazy"></a></details>
+    </div>
+    <footer class="terms__footer">
+      <button class="terms-review" type="button" data-close-terms>Go back</button>
+      <button class="btn btn--maroon" type="button" id="acceptTerms">I agree and continue</button>
+    </footer>
+  </dialog>
 
   <footer class="footer">
     <div class="wrap footer__inner">

@@ -70,9 +70,13 @@ class CapacityBrowserTests(unittest.TestCase):
         else:
             route.abort()
 
-    def open_page(self):
+    def open_page(self, accept_terms=True):
         self.page.goto('http://capacity.test/', wait_until='load')
         self.page.wait_for_function("document.querySelector('[data-rslots]').textContent !== '' || !document.querySelector('#slotsNote').hidden")
+        if accept_terms and not self.page.locator('#fullName').is_disabled():
+            self.page.locator('#fullName').focus()
+            self.page.locator('#acceptTerms').click()
+
 
     def refresh(self):
         return self.page.evaluate("async () => (await import('/js/form.js')).loadSlots()")
@@ -196,6 +200,56 @@ class CapacityBrowserTests(unittest.TestCase):
         self.page.wait_for_function("!document.querySelector('#closedNote').hidden")
         self.assertTrue(self.page.locator('#payQr').is_hidden())
         self.assertTrue(self.page.locator('#submitBtn').is_disabled())
+
+
+    def test_terms_popup_on_first_interaction_and_escape_preserves_form(self):
+        self.open_page(accept_terms=False)
+        self.page.locator('#fullName').focus()
+        self.assertTrue(self.page.locator('#termsDialog').is_visible())
+        self.assertIn('non-refundable', self.page.locator('#termsDialog').inner_text())
+        self.page.keyboard.press('Escape')
+        self.assertTrue(self.page.locator('#termsDialog').is_hidden())
+        self.page.locator('#fullName').fill('Unsaved Player')
+        self.page.locator('#reviewTerms').click()
+        self.page.locator('[data-close-terms]').first.click()
+        self.assertEqual(self.page.locator('#fullName').input_value(), 'Unsaved Player')
+        self.assertFalse(self.page.locator('#termsAgreement').is_checked())
+        self.assertEqual(self.posts, [])
+
+    def test_terms_required_before_submit_and_reset_after_success(self):
+        self.open_page(accept_terms=False)
+        self.page.locator('#fullName').focus()
+        self.page.keyboard.press('Escape')
+        self.fill_form()
+        self.page.locator('#submitBtn').click()
+        self.assertTrue(self.page.locator('#termsDialog').is_visible())
+        self.assertEqual(self.posts, [])
+        self.page.locator('#acceptTerms').click()
+        self.assertTrue(self.page.locator('#termsAgreement').is_checked())
+        self.page.locator('#submitBtn').click()
+        self.page.wait_for_function("document.querySelector('#formStatus').textContent.includes('Registration received')")
+        self.assertEqual(len(self.posts), 1)
+        self.assertEqual(set(self.posts[0]), {'action', 'player', 'receipt', 'validId', 'consent'})
+        self.assertFalse(self.page.locator('#termsAgreement').is_checked())
+
+    def test_terms_mobile_layout_keyboard_and_original_poster(self):
+        self.open_page()
+        for width in [320, 390, 1440]:
+            self.page.set_viewport_size({'width': width, 'height': 740})
+            self.page.locator('#reviewTerms').click()
+            dialog = self.page.locator('#termsDialog')
+            bounds = dialog.bounding_box()
+            self.assertGreaterEqual(bounds['x'], 0)
+            self.assertLessEqual(bounds['x'] + bounds['width'], width)
+            self.assertLessEqual(bounds['height'], 740)
+            self.assertTrue(self.page.locator('#acceptTerms').is_visible())
+            self.assertTrue(self.page.evaluate("document.querySelector('#termsDialog').contains(document.activeElement)"))
+            self.page.locator('.terms__poster summary').click()
+            self.page.locator('.terms__poster img').scroll_into_view_if_needed()
+            self.page.wait_for_function("document.querySelector('.terms__poster img').naturalWidth > 0")
+            self.assertEqual(self.page.locator('.terms__poster img').get_attribute('src'), 'assets/terms-and-conditions.jpg')
+            self.page.keyboard.press('Escape')
+            self.assertTrue(dialog.is_hidden())
 
 
 if __name__ == '__main__':

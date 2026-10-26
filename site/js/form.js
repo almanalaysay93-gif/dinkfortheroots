@@ -1,5 +1,6 @@
 // Registration form: slots, shirt size guide, payment QR, uploads, validation, submit.
 import { CONFIG } from "./config.js";
+import { initTerms, ensureTerms, resetTerms } from "./terms.js";
 import { CATEGORIES, CAP, getSlots, isDemo, register } from "./api.js";
 
 const SIZES = [
@@ -328,6 +329,7 @@ function setBusy(on) {
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 async function send(form, payload) {
+  if (!ensureTerms()) return;
   setBusy(true);
   $("#formStatus").innerHTML = "";
   try {
@@ -349,6 +351,7 @@ async function send(form, payload) {
       const name = esc(payload.player.fullName.split(" ")[0]);
       showStatus("ok", `<h3>Registration received, ${name}</h3><p>Your reference: <span class="ref">${esc(res.ref)}</span></p><p>Your valid ID was received.</p><p>A confirmation email is on its way to ${esc(payload.player.email)}. The organizers will check your receipt and email you if anything is missing.</p><p>Ask your partner to fill their own form.</p>`);
       form.reset();
+      resetTerms();
       for (const key of UPLOAD_KEYS) setUpload(key, null);
       $("#sizeGuide").hidden = true;
       $("#sizeHl").classList.remove("is-on");
@@ -388,6 +391,7 @@ export function initForm() {
   buildSizes();
   buildQr();
   buildUploads();
+  initTerms();
   if (isDemo()) $("#demoNote").hidden = false;
   updatePayment();
   setBusy(false);
@@ -410,6 +414,7 @@ export function initForm() {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if ($("#submitBtn").disabled) return;
+    if (!ensureTerms()) return;
     const p = collect(form);
     ORDER.forEach(clearError);
     const errors = validate(p);
